@@ -42,3 +42,19 @@
 > Create only `PRD.md`, `docs/architecture.md`, and `tasks.md` now, and then stop and summarize in 3 sentences.
 > </pasted_content id="5dbb">
 Reviewed PRD.md, tasks.md, and docs/architecture.md. Approved combining rock, metal, and metalcore queries and keeping catalog state in App.tsx.
+
+**18:13 · claude**
+
+> <pasted_content id="5dbb">
+> Your architectural choices in `docs/architecture.md` (combining rock, metal, and metalcore queries in `App`, storing full `Track` objects in the setlist, and adding `SetlistButton`, `TrackSelect`, and `StatCard`) are approved. One important safeguard: when combining multiple search queries, make sure our normalization/deduplication utility removes duplicate `trackId` entries so React keys are always strictly unique.
+> 
+> Please proceed with **Task 1** from `tasks.md` ONLY:
+> 1. Create the TypeScript interfaces/types (e.g., `Track`, raw iTunes API response types, filter/sort types) with strict typing and zero `any`.
+> 2. Create the local mock JSON dataset with 8–10 great Rock, Metal, and Metalcore tracks (include realistic fields matching our `Track` model, such as tracks by bands like Bad Omens, Architects, Metallica, Iron Maiden, Black Sabbath, Bring Me The Horizon, Procol Harum, etc.).
+> 3. Create the pure utility functions in `src/utils/` (duration formatting `mm:ss`, artwork URL upgrading from `100x100bb` to `600x600bb`, deduplication by `trackId`, filtering, sorting, and setlist total duration calculation) so they are ready for use and later Vitest testing.
+> 4. Update `src/App.tsx` to render the initial static list of tracks from the mock JSON using `.map()` with a unique `key={track.trackId}`, showing basic track details (artwork, title, artist, album, genre, and formatted duration).
+> 5. Verify that `npm run build` passes with zero TypeScript or bundler errors.
+> 
+> Stop after completing Task 1 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Checked the app in the browser with npm run dev (all 9 tracks and total duration rendered cleanly with no console errors). Manually updated Procol Harum's primaryGenreName from "Pop" to "Classic Rock" in mockTracks.json and marked Task 1 as done in tasks.md.

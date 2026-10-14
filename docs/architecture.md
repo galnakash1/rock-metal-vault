@@ -17,7 +17,7 @@ src/
 │   └── track.ts              # All shared TypeScript types (raw API + app models)
 │
 ├── data/
-│   └── mockTracks.json       # 8 rock/metal tracks in raw iTunes shape (Task 1; later a test fixture)
+│   └── mockTracks.json       # 9 rock/metal tracks in raw iTunes shape (Task 1; later a test fixture)
 │
 ├── api/
 │   └── itunes.ts             # fetchCatalog(): calls the iTunes Search API, returns Track[]
@@ -141,7 +141,7 @@ export interface Track {
   previewUrl: string;
   durationMs: number;
   releaseDate: string;            // ISO 8601
-  releaseYear: number;
+  releaseYear: number | null;    // null when the date can't be parsed
   isExplicit: boolean;
   albumTrackCount: number | null; // null when the API omits it
   storeUrl: string | null;
@@ -270,8 +270,9 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | --- | --- | --- | --- |
 | `formatDuration` | `(ms: number \| undefined) => string` | `245000 → "04:05"`; zero-padded `mm:ss`; ≥ 1 hour → `"h:mm:ss"` (for setlist totals); invalid/negative/undefined → `"00:00"`; rounds down to whole seconds | ✅ Task 4 |
 | `upgradeArtworkUrl` | `(url: string, size?: number) => string` | Replaces `/\d+x\d+bb/` with `600x600bb` (default size); returns non-matching URLs unchanged | ✅ Task 4 |
-| `getReleaseYear` | `(isoDate: string) => number` | Uses `getUTCFullYear()` to avoid time-zone off-by-one; `NaN`-safe | ✅ Task 4 |
+| `getReleaseYear` | `(isoDate: string) => number \| null` | Uses `getUTCFullYear()` to avoid time-zone off-by-one; `null` for invalid dates | ✅ Task 4 |
 | `normalizeTrack` | `(raw: ITunesTrackRaw) => Track \| null` | Maps the API shape to `Track`; returns `null` for non-songs or entries without `previewUrl` | ✅ Task 4 |
+| `dedupeTracks` | `(tracks: Track[]) => Track[]` | Keeps the first occurrence of each `id` (iTunes `trackId`) so merged queries never produce duplicate React keys | ✅ Task 4 |
 | `normalizeTracks` | `(raws: ITunesTrackRaw[]) => Track[]` | Normalizes, drops `null`s, de-duplicates by `id` | ✅ Task 4 |
 | `filterTracks` | `(tracks: Track[], filters: TrackFilters) => Track[]` | Case-insensitive, trimmed search across title/artist/album, combined (AND) with exact genre and artist match | ✅ Task 4 |
 | `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use `localeCompare` | ✅ Task 4 |

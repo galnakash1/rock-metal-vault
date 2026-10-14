@@ -8,14 +8,14 @@
 
 ## Task 1 — Types, mock data, utilities, and a static list
 
-- [ ] **Goal:** Lay the typed data foundation and render something real on screen.
+- [x] **Goal:** Lay the typed data foundation and render something real on screen.
 - **Files:** `src/types/track.ts`, `src/data/mockTracks.json`, `src/utils/trackUtils.ts`, `src/App.tsx` (and clean up the Vite template in `App.css` / `index.css`)
 - **Steps:**
   1. In `src/types/track.ts`, define `ITunesTrackRaw`, `ITunesSearchResponse`, `Track`, `TrackFilters`, `SortKey`, and `FetchStatus`, as described in the architecture doc.
-  2. Create `src/data/mockTracks.json` with **8 rock/metal tracks** in the raw iTunes response shape (`{ resultCount, results: [...] }`).
-  3. In `src/utils/trackUtils.ts`, implement `formatDuration`, `upgradeArtworkUrl`, `getReleaseYear`, `normalizeTrack`, `normalizeTracks`, `filterTracks`, `sortTracks`, `getTotalDuration`, `getUniqueGenres`, and `getUniqueArtists`.
+  2. Create `src/data/mockTracks.json` with **8–10 rock/metal tracks** in the raw iTunes response shape (`{ resultCount, results: [...] }`).
+  3. In `src/utils/trackUtils.ts`, implement `formatDuration`, `upgradeArtworkUrl`, `getReleaseYear`, `normalizeTrack`, `dedupeTracks`, `normalizeTracks`, `filterTracks`, `sortTracks`, `getTotalDuration`, `getUniqueGenres`, and `getUniqueArtists`.
   4. In `App.tsx`, import the mock JSON, normalize it, and render a simple static list (artwork, title, artist, `mm:ss` duration).
-- **Done when:** `npm run dev` shows the 8 mock tracks with formatted `mm:ss` durations, and `npm run build` passes with zero TypeScript errors and no `any`.
+- **Done when:** `npm run dev` shows the mock tracks with formatted `mm:ss` durations, and `npm run build` passes with zero TypeScript errors and no `any`.
 
 ---
 

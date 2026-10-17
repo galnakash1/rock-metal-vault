@@ -1,5 +1,5 @@
 import type { ITunesTrackRaw, Track } from '../types/track'
-import { isRockOrMetalGenre, normalizeTracks, parseSearchResults } from '../utils/trackUtils'
+import { isVaultTrack, normalizeTracks, parseSearchResults } from '../utils/trackUtils'
 
 const SEARCH_URL = 'https://itunes.apple.com/search'
 const SEARCH_TERMS = ['rock', 'metal', 'metalcore'] as const
@@ -37,9 +37,9 @@ async function searchSongs(term: string, signal?: AbortSignal): Promise<ITunesTr
 
 /**
  * Loads the Vault catalog: searches rock, metal and metalcore in parallel, then
- * normalizes, de-duplicates by trackId and keeps only rock/metal-family genres.
+ * normalizes + enriches, de-duplicates by trackId and keeps only rock/metal tracks.
  */
 export async function fetchCatalog(signal?: AbortSignal): Promise<Track[]> {
   const resultsByTerm = await Promise.all(SEARCH_TERMS.map((term) => searchSongs(term, signal)))
-  return normalizeTracks(resultsByTerm.flat()).filter((track) => isRockOrMetalGenre(track.genre))
+  return normalizeTracks(resultsByTerm.flat()).filter(isVaultTrack)
 }

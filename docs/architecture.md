@@ -15,6 +15,7 @@ src/
 │
 ├── types/
 │   ├── track.ts              # Raw API + app models, filters, moods, lineup, blind-test types
+│   ├── riff.ts               # Guitar Riff Tab types
 │   └── audio.ts              # EQ preset types
 │
 ├── data/
@@ -28,8 +29,10 @@ src/
 │   └── useAmpConsole.ts      # Web Audio graph (EQ filters + analyser) for the Amp Console
 │
 ├── utils/
-│   ├── trackUtils.ts         # Pure functions: normalize, format, filter, sort, moods, lineup, arena
-│   ├── trackUtils.test.ts    # Vitest unit tests
+│   ├── trackUtils.ts         # Pure functions: validate, normalize + enrich, filter, sort, moods, lineup, arena
+│   ├── trackUtils.test.ts    # Vitest unit tests (utils, enrichment, moods, riff tabs)
+│   ├── artistMetadata.ts     # Curated artist → origin country/flag + subgenre map, with fallback
+│   ├── riffTabs.ts           # Style-based 6-string practice riffs: profiles, templates, renderer
 │   ├── audioUtils.ts         # Pure functions: EQ presets, frequency bucketing for the visualizer
 │   └── audioUtils.test.ts
 │
@@ -39,6 +42,7 @@ src/
 │   ├── FilterBar.tsx
 │   ├── MoodCapsules.tsx      # Signature 1
 │   ├── AudioPreviewPlayer.tsx# Signature 2 — the Amp Console
+│   ├── RiffTabPanel.tsx      # Guitar Riff Tab panel (detail page)
 │   ├── StatusMessage.tsx
 │   ├── SetlistButton.tsx
 │   ├── FestivalPoster.tsx    # Signature 3
@@ -65,14 +69,15 @@ src/
     └── <Routes>
         ├── "/"            <CatalogPage tracks status error onRetry isInSetlist onToggleSetlist>
         │                   ├── <StatusMessage />          (loading / error / empty results)
-        │                   ├── <FilterBar filters genres artists onChange resultCount totalCount />
-        │                   ├── <MoodCapsules activeMood onChange />
+        │                   ├── <FilterBar filters countries subgenres artists onChange resultCount totalCount />
+        │                   ├── <MoodCapsules activeMood={filters.mood} onChange />
         │                   └── <TrackCard track inSetlist onToggleSetlist />  × N
         │                         └── <SetlistButton />
         │
         ├── "/tracks/:id"  <TrackDetailPage tracks status setlist isInSetlist onToggleSetlist>
         │                   ├── <StatusMessage />          (loading / not found)
         │                   ├── <AudioPreviewPlayer src title />   (Amp Console)
+        │                   ├── <RiffTabPanel tab={getTrackRiffTab(track)} />
         │                   └── <SetlistButton />
         │
         ├── "/setlist"     <SetlistPage setlist onRemove onClear>
@@ -95,13 +100,14 @@ src/
 | --- | --- | --- |
 | `Navbar` | Brand logo + `NavLink`s (Vault Catalog / Festival Poster / Riff Arena); highlights the active route; shows the setlist count badge | `setlistCount: number` |
 | `TrackCard` | Artwork, title, artist, album, duration, explicit badge; links to `/tracks/:id`; contains the setlist toggle | `track`, `inSetlist`, `onToggleSetlist` |
-| `FilterBar` | Controlled search input, genre `<select>`, artist `<select>`, sort `<select>`, results count | `filters`, `genres`, `artists`, `onChange`, `resultCount`, `totalCount` |
+| `FilterBar` | Controlled search input, Origin Country `<select>` (flag + name), Style/Subgenre `<select>`, Artist `<select>`, sort `<select>`, results count | `filters`, `countries`, `subgenres`, `artists`, `onChange`, `resultCount`, `totalCount` |
 | `MoodCapsules` | Row of toggle pills (`aria-pressed`) built from `MOOD_CAPSULES`; clicking the active pill clears it | `activeMood: MoodId \| null`, `onChange` |
 | `AudioPreviewPlayer` | **Amp Console:** `<audio crossOrigin="anonymous">` + custom play/pause/progress, `<canvas>` frequency bars, and EQ preset buttons; uses `useAmpConsole` | `src`, `title` |
 | `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `action?` |
 | `SetlistButton` | Add / Remove toggle with an `aria-pressed` state; stops click propagation when used inside a card link | `inSetlist`, `onToggle` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large), Underbill (small), runtime, and counts; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
 | `BlindTestGame` | Round flow (start → listen → guess → reveal → next), blurred artwork, 4 option buttons, score/streak | `tracks` |
+| `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled as a style-based practice riff | `tab: GuitarRiffTab` |
 | `TrackSelect` | Labelled `<select>` listing catalog tracks (used twice in the Head-to-Head) | `label`, `tracks`, `value`, `onChange` |
 
 The first five required components are `Navbar`, `TrackCard`, `FilterBar`, `AudioPreviewPlayer`, and `StatusMessage`. The rest either carry a signature feature or remove duplicated markup.
@@ -139,13 +145,32 @@ export interface ITunesSearchResponse {
   results: ITunesTrackRaw[]
 }
 
+// ---------- Band origin & style enrichment ----------
+export type OriginCountry =
+  | 'United States' | 'United Kingdom' | 'Sweden' | 'Germany' | 'Australia'
+  | 'France' | 'Canada' | 'Finland' | 'Denmark'
+  | 'Unknown'                    // artist isn't in the curated map
+
+export type Subgenre =           // 25 styles, e.g.
+  | 'Metalcore' | 'Heavy Metal' | 'Thrash Metal' | 'Alternative Metal' | 'Nu Metal'
+  | 'Hard Rock' | 'Classic Rock' | 'Progressive Rock' | 'Grunge' | 'Punk Rock' | …
+  | 'Rock'                       // generic fallback
+
+export interface ArtistMetadata {
+  originCountry: OriginCountry
+  subgenre: Subgenre
+}
+
 // ---------- App model ----------
 export interface Track {
   id: number                     // iTunes trackId — unique across the catalog
   title: string
   artist: string
   album: string
-  genre: string
+  genre: string                  // iTunes primaryGenreName, e.g. "Metal"
+  subgenre: Subgenre             // enriched style, e.g. "Thrash Metal"
+  originCountry: OriginCountry   // where the band formed — not the storefront
+  originFlag: string             // emoji flag, e.g. "🇬🇧" ("🌐" for Unknown)
   artworkUrl: string             // original 100x100
   artworkUrlLarge: string        // upgraded 600x600
   previewUrl: string
@@ -164,9 +189,11 @@ export type SortKey =
   | 'duration-shortest' | 'duration-longest'
 
 export interface TrackFilters {
-  search: string                 // free text; '' = no search
-  genre: string                  // '' = all genres
+  search: string                 // title/artist/album/subgenre/country; '' = no search
+  country: OriginCountry | ''    // '' = all countries
+  subgenre: Subgenre | ''        // '' = all styles
   artist: string                 // '' = all artists
+  mood: MoodId | null            // Sonic Mood Capsule; null = none
   sort: SortKey
 }
 
@@ -176,7 +203,7 @@ export type FetchStatus = 'loading' | 'error' | 'success'
 // ---------- Signature 1: Sonic Mood Capsules ----------
 export type MoodId =
   | 'atmospheric-epic'           // duration >= 5:00
-  | 'modern-breakdown'           // year >= 2010 AND genre contains "metal"
+  | 'modern-breakdown'           // year >= 2010 AND metal/metalcore (genre or subgenre)
   | 'legends-70s-80s'            // 1970 <= year <= 1989
   | 'quick-riff-blitz'           // duration < 3:30
 
@@ -225,6 +252,26 @@ export interface ComparisonRow {
 }
 ```
 
+### `src/types/riff.ts`
+
+```ts
+export type GuitarString = 'e' | 'B' | 'G' | 'D' | 'A' | 'E'   // top line → bottom line
+export type RiffDifficulty = 'Beginner' | 'Intermediate' | 'Advanced'
+export type RiffFamily =
+  | 'metalcore' | 'nu-metal' | 'alt-metal' | 'thrash' | 'heavy-metal'
+  | 'progressive' | 'hard-rock' | 'classic-rock' | 'punk' | 'grunge'
+export type RiffStep = Partial<Record<GuitarString, number>>  // one tab column (fret per string)
+
+export interface GuitarRiffTab {
+  title: string                  // "Metalcore practice riff"
+  family: RiffFamily
+  tuning: string                 // "Drop C (C G C F A D)"
+  bpm: number                    // suggested practice tempo
+  difficulty: RiffDifficulty
+  lines: Record<GuitarString, string>   // six equal-length lines, e.g. E: "|-0-0-3-|"
+}
+```
+
 ### `src/types/audio.ts`
 
 ```ts
@@ -239,7 +286,7 @@ export interface EqPreset {
 }
 ```
 
-Each type is added in the task that first needs it. Task 1 created the track, filter, and fetch types.
+Each type is added in the task that first needs it. Task 1 created the track, filter, and fetch types; Task 4 added origin/style enrichment, moods, the extended filters, and riff tabs.
 
 ### Component props (examples)
 
@@ -250,6 +297,10 @@ export interface TrackCardProps {
   track: Track
   inSetlist: boolean
   onToggleSetlist: (track: Track) => void
+}
+
+export interface RiffTabPanelProps {
+  tab: GuitarRiffTab
 }
 
 export interface MoodCapsulesProps {
@@ -289,10 +340,10 @@ There are no external state libraries — just React state, custom hooks, and pr
 | --- | --- | --- | --- |
 | Catalog `tracks`, `status`, `error` (+ `requestId` for retries) | `App` (`useState` + `useEffect`) | Needed by Catalog, Detail, and Arena; fetched **once** (rate limits) and shared | Props → pages |
 | `setlist: Track[]` + actions | `App` via `useSetlist()` | Needed by the Navbar badge, cards, Detail, and the Setlist page | Props → `Navbar`, pages → `TrackCard` / `SetlistButton` |
-| `filters: TrackFilters` | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `FilterBar`; `onChange` callback goes back up |
-| `mood: MoodId \| null` | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `MoodCapsules` |
-| Visible tracks | Derived in `CatalogPage`: `useMemo(() => sortTracks(filterByMood(filterTracks(tracks, filters), mood), filters.sort))` | Derived data — never stored in state | Props → `TrackCard`s |
-| Genre / artist options | Derived with `getUniqueGenres` / `getUniqueArtists` | Derived | Props → `FilterBar` |
+| `filters: TrackFilters` (search, country, subgenre, artist, mood, sort) | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `FilterBar` and `MoodCapsules` (`filters.mood`); `onChange` callbacks go back up |
+| Visible tracks | Derived in `CatalogPage`: `useMemo(() => sortTracks(filterTracks(tracks, filters), filters.sort))` | Derived data — never stored in state | Props → `TrackCard`s |
+| Country / style / artist options | Derived with `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | Derived | Props → `FilterBar` |
+| Riff tab | Derived in `TrackDetailPage`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `RiffTabPanel` |
 | Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` | Single source of truth is the URL | Local render |
 | EQ preset, play state, progress | `AudioPreviewPlayer` (`useState`) | Local to one player | `useAmpConsole` |
 | Audio graph nodes, animation frame id | `useAmpConsole` (`useRef`) | Mutable, non-render data | — |
@@ -328,8 +379,8 @@ There are no external state libraries — just React state, custom hooks, and pr
 ### 1 — Sonic Mood Capsules
 
 - `MOOD_CAPSULES: MoodCapsule[]` (in `trackUtils.ts`) defines the four pills in display order.
-- `matchesMood(track, mood)` holds the rules: `≥ 300 000 ms`; `year ≥ 2010 && /metal/i.test(genre)`; `1970 ≤ year ≤ 1989`; `< 210 000 ms`. Tracks with a `null` year never match the year-based moods.
-- `filterByMood(tracks, mood | null)` returns the list unchanged for `null`.
+- `matchesMood(track, mood)` holds the rules: `≥ 300 000 ms`; `year ≥ 2010 && (/metal/i.test(genre) || /metal|core/i.test(subgenre))`; `1970 ≤ year ≤ 1989`; `< 210 000 ms`. Tracks with a `null` year never match the year-based moods. The style check means "Hard Rock"-tagged metalcore bands (e.g. Bring Me The Horizon) still count.
+- The mood is part of `TrackFilters`, and `filterTracks` applies it (`mood: null` = no capsule), so moods combine (AND) with search and the other filters.
 
 ### 2 — Amp Console Player (`AudioPreviewPlayer` + `useAmpConsole`)
 
@@ -362,6 +413,24 @@ There are no external state libraries — just React state, custom hooks, and pr
 - `applyGuess(score, isCorrect)` returns the next `BlindTestScore` (streak resets on a miss; `bestStreak = max`).
 - The Head-to-Head uses `compareTracks(a, b)` to build the comparison table.
 
+## 5b. Music-Data Enrichments
+
+### Band origin & style (`artistMetadata.ts`)
+
+- `ARTIST_ENTRIES` is a curated list of ~120 rock/metal/metalcore artists (`[name, originCountry, subgenre]`), stored in a `Map` keyed by `normalizeArtistKey(name)`. The key is lowercased, has a trailing `"(US)"`-style qualifier removed, uses straight quotes, and has its whitespace collapsed.
+- `findArtistMetadata(artist)` tries an exact key first, then the **lead artist** of a collaboration (`"Bad Omens, Let's Eat Grandma & Chief"` → Bad Omens). It returns `null` when the artist isn't listed.
+- `getArtistMetadata(artist, itunesGenre)` never fails. Unlisted artists get `originCountry: 'Unknown'` (we never guess a country) and a style mapped from the iTunes genre (`Metal` → Heavy Metal, `Punk` → Punk Rock, … else `Rock`).
+- `normalizeTrack` calls it, so every `Track` (live or fixture) carries `originCountry`, `originFlag` (`COUNTRY_FLAGS`), and `subgenre`.
+- **Catalog membership:** `isVaultTrack(track)` = genre on `ROCK_METAL_GENRES` **or** artist in the curated map. "Alternative" is not on the allowlist, so pop-leaning Alternative acts (twenty one pilots, Hozier, …) are dropped, while curated bands (Linkin Park, Green Day, …) stay.
+
+### 6-String Guitar Riff Tab (`riffTabs.ts`)
+
+- These are **style-based practice riffs, not transcriptions** of the recordings. The UI labels them that way (e.g. "Metalcore practice riff").
+- `SUBGENRE_RIFF_FAMILIES: Record<Subgenre, RiffFamily>` maps every style to one of 10 families. `RIFF_PROFILES: Record<RiffFamily, …>` gives each family a tuning (Drop C, Drop B, Drop D, E Standard), a BPM range, a difficulty, and two riff templates.
+- Templates are lists of `RiffStep`s built from helpers: `chug(fret)` (low-string chug), `dropFive` (one-finger drop power chord), `powerE` / `powerA` (standard power chords), and `note`.
+- `renderTab(steps)` turns steps into six aligned lines. Each column is as wide as its widest fret, so `10` never breaks alignment.
+- `getTrackRiffTab(track)` is deterministic: the style picks the profile, and `track.id` picks the template and a BPM within the range.
+
 ## 6. Utility Functions
 
 All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Functions marked ✅ are covered in Task 4. The rest get tests in the task that introduces them.
@@ -378,12 +447,13 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `normalizeTrack` | `(raw: ITunesTrackRaw) => Track \| null` | Maps the API shape to `Track`; returns `null` for non-tracks or entries without `previewUrl` | ✅ Task 4 |
 | `dedupeTracks` | `(tracks: Track[]) => Track[]` | Keeps the first occurrence of each `id` (iTunes `trackId`) so merged queries never produce duplicate React keys | ✅ Task 4 |
 | `normalizeTracks` | `(raws: ITunesTrackRaw[]) => Track[]` | Normalizes, drops `null`s, de-duplicates by `id` | ✅ Task 4 |
-| `isRockOrMetalGenre` | `(genre: string) => boolean` | Exact match against the `ROCK_METAL_GENRES` allowlist (Rock, Hard Rock, Metal, Alternative, Punk, …); used by `fetchCatalog` | ✅ Task 4 |
-| `filterTracks` | `(tracks, filters: Pick<TrackFilters, 'search' \| 'genre' \| 'artist'>) => Track[]` | Case-insensitive, trimmed search across title/artist/album, combined (AND) with exact genre and artist match | ✅ Task 4 |
+| `isRockOrMetalGenre` | `(genre: string) => boolean` | Exact match against the `ROCK_METAL_GENRES` allowlist (Rock, Hard Rock, Metal, Punk, …; no "Alternative") | ✅ Task 4 |
+| `isVaultTrack` | `(track: Pick<Track, 'genre' \| 'artist'>) => boolean` | Allowlisted genre **or** curated artist; used by `fetchCatalog` | ✅ Task 4 |
+| `filterTracks` | `(tracks, filters: Omit<TrackFilters, 'sort'>) => Track[]` | Case-insensitive, trimmed search across title/artist/album/subgenre/country, combined (AND) with exact country, subgenre, and artist matches and the mood capsule | ✅ Task 4 |
 | `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use `localeCompare` | ✅ Task 4 |
 | `getTotalDuration` | `(tracks: Track[]) => number` | Sum of `durationMs` (0 for an empty list) | ✅ Task 4 |
-| `getUniqueGenres` / `getUniqueArtists` | `(tracks: Track[]) => string[]` | Sorted, de-duplicated option lists for `FilterBar` | ✅ Task 4 |
-| `matchesMood` / `filterByMood` | `(track, mood) => boolean` / `(tracks, mood \| null) => Track[]` | Sonic Mood Capsule rules (see §5) | ✅ Task 4 |
+| `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | `(tracks: Track[]) => OriginCountry[] / Subgenre[] / string[]` | Sorted, de-duplicated option lists for `FilterBar` ("Unknown" country last) | ✅ Task 4 |
+| `MOOD_CAPSULES` / `matchesMood` | `MoodCapsule[]` / `(track, mood: MoodId) => boolean` | Sonic Mood Capsule definitions and rules (see §5) | ✅ Task 4 |
 | `parseStoredSetlist` | `(raw: string \| null) => Track[]` | Safe `JSON.parse`; `[]` for null, invalid JSON, or non-arrays | Task 6 |
 | `toggleTrackInList` | `(list: Track[], track: Track) => Track[]` | Adds the track if absent, removes it if present (immutable) | Task 6 |
 | `buildFestivalLineup` | `(tracks: Track[]) => FestivalLineup` | Groups by artist, ranks, and splits into Headliners / Underbill | Task 6 |
@@ -394,6 +464,24 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `applyGuess` | `(score: BlindTestScore, isCorrect: boolean) => BlindTestScore` | Score/streak/best-streak update | Task 7 |
 | `compareTracks` | `(a: Track, b: Track) => ComparisonRow[]` | Rows for duration, release year, explicit rating, album track count, each with a winner | Task 7 |
 
+### `src/utils/artistMetadata.ts`
+
+| Function / constant | Signature | Behavior | Test |
+| --- | --- | --- | --- |
+| `COUNTRY_FLAGS` | `Record<OriginCountry, string>` | Emoji flag per country (`🌐` for Unknown) | ✅ Task 4 |
+| `normalizeArtistKey` | `(name: string) => string` | Case/quote/qualifier/whitespace-insensitive lookup key | ✅ Task 4 |
+| `findArtistMetadata` | `(artist: string) => ArtistMetadata \| null` | Curated lookup (exact, then lead artist of a collaboration) | ✅ Task 4 |
+| `getArtistMetadata` | `(artist: string, itunesGenre: string) => ArtistMetadata` | Curated data or the deterministic `Unknown` + genre-derived fallback | ✅ Task 4 |
+
+### `src/utils/riffTabs.ts`
+
+| Function / constant | Signature | Behavior | Test |
+| --- | --- | --- | --- |
+| `GUITAR_STRINGS` | `readonly GuitarString[]` | `['e', 'B', 'G', 'D', 'A', 'E']` — tab line order | ✅ Task 4 |
+| `SUBGENRE_RIFF_FAMILIES` / `RIFF_PROFILES` | `Record<Subgenre, RiffFamily>` / `Record<RiffFamily, RiffProfile>` | Style → family → tuning, BPM range, difficulty, templates | ✅ Task 4 |
+| `renderTab` | `(steps: readonly RiffStep[]) => Record<GuitarString, string>` | Six aligned `\|-…-\|` lines; multi-digit frets widen the whole column | ✅ Task 4 |
+| `getTrackRiffTab` | `(track: Pick<Track, 'id' \| 'subgenre'>) => GuitarRiffTab` | Deterministic practice riff for any track | ✅ Task 4 |
+
 ### `src/utils/audioUtils.ts`
 
 | Function / constant | Signature | Behavior | Test |
@@ -401,7 +489,7 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `EQ_PRESETS` | `Record<EqPresetId, EqPreset>` | The four Amp Console presets | Task 5 |
 | `bucketFrequencies` | `(data: Uint8Array, bars: number) => number[]` | Averages FFT bins into `bars` values normalized to 0–1 | Task 5 |
 
-**Test fixtures:** `src/data/mockTracks.json` uses the raw iTunes response shape. It feeds the static list in Tasks 1–2 and is reused as the test fixture after the switch to the real API in Task 3. The tests never hit the network.
+**Test fixtures:** `src/data/mockTracks.json` (10 real iTunes records from US, UK, and Australian bands) uses the raw iTunes response shape, and tests load it through `parseSearchResults`, the same validation the live API uses. It feeds the static list in Tasks 1–2 and is reused as the test fixture after the switch to the real API in Task 3. The tests never hit the network.
 
 ## 7. Routing
 

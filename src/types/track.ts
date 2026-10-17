@@ -26,6 +26,53 @@ export interface ITunesSearchResponse {
   results: ITunesTrackRaw[]
 }
 
+// ---------- Band origin & style enrichment ----------
+// iTunes only knows the storefront country, so origin and style come from our own artist map.
+
+export type OriginCountry =
+  | 'United States'
+  | 'United Kingdom'
+  | 'Sweden'
+  | 'Germany'
+  | 'Australia'
+  | 'France'
+  | 'Canada'
+  | 'Finland'
+  | 'Denmark'
+  | 'Unknown' // artist isn't in the curated map
+
+export type Subgenre =
+  | 'Metalcore'
+  | 'Post-Hardcore'
+  | 'Heavy Metal'
+  | 'Thrash Metal'
+  | 'Groove Metal'
+  | 'Alternative Metal'
+  | 'Nu Metal'
+  | 'Rap Metal'
+  | 'Industrial Metal'
+  | 'Progressive Metal'
+  | 'Melodic Death Metal'
+  | 'Power Metal'
+  | 'Symphonic Metal'
+  | 'Hard Rock'
+  | 'Classic Rock'
+  | 'Progressive Rock'
+  | 'Alternative Rock'
+  | 'Stoner Rock'
+  | 'Funk Rock'
+  | 'Gothic Rock'
+  | 'Grunge'
+  | 'Post-Grunge'
+  | 'Punk Rock'
+  | 'Emo'
+  | 'Rock' // generic fallback
+
+export interface ArtistMetadata {
+  originCountry: OriginCountry
+  subgenre: Subgenre
+}
+
 // ---------- App model ----------
 
 export interface Track {
@@ -33,7 +80,10 @@ export interface Track {
   title: string
   artist: string
   album: string
-  genre: string
+  genre: string // iTunes primaryGenreName, e.g. "Metal"
+  subgenre: Subgenre // enriched style, e.g. "Thrash Metal"
+  originCountry: OriginCountry // where the band was formed, not the storefront
+  originFlag: string // emoji flag for originCountry
   artworkUrl: string // original 100x100
   artworkUrlLarge: string // upgraded 600x600
   previewUrl: string
@@ -43,6 +93,20 @@ export interface Track {
   isExplicit: boolean
   albumTrackCount: number | null // null when the API omits it
   storeUrl: string | null
+}
+
+// ---------- Sonic Mood Capsules ----------
+
+export type MoodId =
+  | 'atmospheric-epic' // duration >= 5:00
+  | 'modern-breakdown' // released 2010+ AND metal/metalcore
+  | 'legends-70s-80s' // released 1970–1989
+  | 'quick-riff-blitz' // duration < 3:30
+
+export interface MoodCapsule {
+  id: MoodId
+  label: string // e.g. "Atmospheric & Epic"
+  description: string // tooltip / screen-reader hint
 }
 
 // ---------- Filtering & sorting ----------
@@ -57,9 +121,11 @@ export type SortKey =
   | 'duration-longest'
 
 export interface TrackFilters {
-  search: string // free text; '' = no search
-  genre: string // '' = all genres
+  search: string // free text over title/artist/album/subgenre/country; '' = no search
+  country: OriginCountry | '' // '' = all countries
+  subgenre: Subgenre | '' // '' = all styles
   artist: string // '' = all artists
+  mood: MoodId | null // null = no mood capsule
   sort: SortKey
 }
 

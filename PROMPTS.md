@@ -104,3 +104,31 @@ Tested all routes in the browser (/, /tracks/:id, /setlist, /arena, and invalid 
 > Stop after completing Task 3 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Verified live iTunes API fetch in the browser (129 rock/metal tracks loaded cleanly) and tested loading, empty, and error retry states via StatusMessage. Marked Task 3 as done in tasks.md.
+**11:10 · claude**
+
+> <pasted_content id="5dbb">
+> Task 3 is verified and committed. Before executing Task 4, we want to enrich our track model and utility layer with 3 music-focused enhancements so we can unit-test their logic now in Task 4 and render them in the UI in Task 5:
+> 
+> 1. **Band Origin Country & Subgenre Enrichment:**
+>    - Since Apple's `country` field only reflects the storefront ("USA") rather than where the band was formed, add a clean metadata enrichment step during track normalization (e.g., via a lookup map of major rock/metal/metalcore artists in `src/utils/` with a deterministic fallback for any unlisted artist) that populates:
+>      - `originCountry` (e.g., `"United Kingdom"`, `"United States"`, `"Sweden"`, `"Germany"`, `"Australia"`, `"France"`, `"Canada"`, `"Finland"`) and `originFlag` (matching flag emoji).
+>      - `subgenre` / style (e.g., `"Metalcore"`, `"Heavy Metal"`, `"Thrash Metal"`, `"Alternative Metal"`, `"Hard Rock"`, `"Progressive Rock"`, `"Classic Rock"`). Also tighten the genre allowlist if needed so pop-leaning tracks like twenty one pilots don't dilute the rock/metal catalog.
+> 2. **Search & Filtering by Country and Style/Subgenre:**
+>    - Extend `TrackFilters` and `filterTracks` so users can filter the catalog by **Origin Country**, **Style/Subgenre**, **Artist**, **Sonic Mood Capsule**, and free-text search (matching title, artist, album, subgenre, or origin country). Add helper `getUniqueCountries(tracks)`.
+> 3. **Interactive 6-String Guitar Riff Tab Data (for `/tracks/:id` in Task 5):**
+>    - Add a `GuitarRiffTab` type and resolver helper (e.g., `getTrackRiffTab(track)`) that returns guitar playing metadata for any track: `tuning` (e.g., `"Drop C (C G C F A D)"`, `"Drop B"`, `"E Standard"`), `bpm`, `difficulty`, and a structured 6-string tab (`e`, `B`, `G`, `D`, `A`, `E` string lines) so guitarists can read and play along with the riff on the Track Detail page alongside the Amp Console.
+> 
+> Please do the following now for **Task 4**:
+> 1. Briefly update `PRD.md`, `docs/architecture.md`, and `tasks.md` to include these 3 enrichments (Band Origin Country, Country/Style filtering, and Guitar Riff Tab panel on `/tracks/:id`), and implement their types and pure utility functions in `src/types/` and `src/utils/` (and update `mockTracks.json` if needed).
+> 2. Install `vitest` and `@vitest/ui`, and configure `"test": "vitest run"` and `"test:ui": "vitest --ui"` in `package.json`.
+> 3. Create a comprehensive unit test suite in `src/utils/trackUtils.test.ts` (using `mockTracks.json` and edge-case inputs) with at least 8–10 meaningful tests covering:
+>    - Duration formatting (`mm:ss`) and total setlist duration calculation.
+>    - Artwork URL upgrading (`100x100bb` to `600x600bb`).
+>    - Normalization, deduplication by `trackId`, and Band Origin / Subgenre enrichment.
+>    - Filtering by search query, Origin Country, Style/Subgenre, and Sonic Mood Capsules (`Atmospheric & Epic`, `Modern Breakdown`, `70s–80s Legends`, `Quick Riff Blitz`).
+>    - Sorting tracks and resolving a track's 6-string Guitar Riff Tab (`getTrackRiffTab`).
+> 4. Verify that `npm test`, `npm run build`, and `npm run lint` all pass with zero errors and zero `any`.
+> 
+> Stop after completing Task 4 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Ran npm test and npm run test:ui in the browser and verified all 37 unit tests pass across duration formatting, country/style enrichment, mood filtering, deduplication, and guitar riff tab generation. Marked Task 4 as done in tasks.md.

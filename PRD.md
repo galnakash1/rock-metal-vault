@@ -28,6 +28,14 @@ The app has exactly **four** signature features. To keep the UI clean and unclut
 | 3 | **Festival Lineup & Poster Builder** | `/setlist` | Saved tracks become a festival poster with Headliner and Underbill tiers, total runtime, and switchable themes |
 | 4 | **Riff Blind-Test Challenge** | `/arena` | Guess the track from its preview while blurred artwork slowly sharpens, with score and streak, plus a head-to-head comparison |
 
+Supporting the features above are three **music-data enrichments**, which add data rather than extra UI:
+
+| Enrichment | Where it shows | In short |
+| --- | --- | --- |
+| **Band Origin & Style** | Cards, `/tracks/:id`, filters | Each track gets the band's origin country + flag and a style/subgenre (e.g. 🇬🇧 Metalcore) from a curated artist map |
+| **Country & Style filtering** | `/` | Filter by Origin Country and Style/Subgenre; search also matches style and country |
+| **6-String Guitar Riff Tab** | `/tracks/:id` | A playable practice riff for the track's style: tuning, BPM, difficulty, and a 6-line tab |
+
 ## 3. Tech Stack & Constraints
 
 | Area | Choice |
@@ -49,7 +57,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
 - The catalog is built from three searches (`rock`, `metal`, `metalcore`) that are merged and de-duplicated by `trackId`.
-- Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so only tracks whose `primaryGenreName` is on a rock/metal-family allowlist (Rock, Hard Rock, Metal, Alternative, Punk, …) are kept.
+- Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band. iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
+- **Band origin & style enrichment:** Apple's `country` field is the storefront ("USA"), not where a band formed. During normalization, each track is enriched from a curated map of ~120 rock/metal/metalcore artists with `originCountry` + `originFlag` (United States 🇺🇸, United Kingdom 🇬🇧, Sweden 🇸🇪, Germany 🇩🇪, Australia 🇦🇺, France 🇫🇷, Canada 🇨🇦, Finland 🇫🇮, Denmark 🇩🇰) and a `subgenre` (Metalcore, Thrash Metal, Hard Rock, …). Unlisted artists fall back deterministically to **"Unknown" 🌐** (a country is never guessed) and a style derived from the iTunes genre.
 - Fields used: `trackId`, `trackName`, `artistName`, `collectionName`, `artworkUrl100`, `previewUrl`, `trackTimeMillis`, `primaryGenreName`, `releaseDate`, `trackExplicitness`, `trackCount`.
 - Artwork is upgraded from `100x100` to `600x600` by rewriting the URL (`…/100x100bb.jpg` → `…/600x600bb.jpg`).
 - Results without a `previewUrl` are dropped, because every track in the Vault must be playable.
@@ -60,16 +69,16 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 ### a) `/` — Vault Catalog (Master List)
 
-- A grid of **track cards**. Each card shows artwork, track title, artist, album, and duration, and has an add/remove-from-setlist button.
-- A **search input** that filters live (as you type) by track title, artist, or album, ignoring case.
-- A **genre filter** (values come from the data, e.g. Metal, Rock, Hard Rock) and an **artist filter**.
+- A grid of **track cards**. Each card shows artwork, track title, artist, album, origin flag, style, and duration, and has an add/remove-from-setlist button.
+- A **search input** that filters live (as you type) by track title, artist, album, style/subgenre, or origin country, ignoring case.
+- **Origin Country**, **Style/Subgenre**, and **Artist** filters (options come from the loaded data; Style replaces the coarse iTunes genre).
 - A **sort selector**: Title A–Z / Z–A, Artist A–Z, Newest / Oldest release, Shortest / Longest duration.
 - **Sonic Mood Capsules** (signature feature 1): a row of mood pills above the list. Clicking a pill applies that mood; clicking the active pill again clears it. One mood can be active at a time, and it combines (AND) with search, filters, and sort.
 
   | Pill | Rule |
   | --- | --- |
   | Atmospheric & Epic | duration ≥ 5:00 |
-  | Modern Breakdown | released 2010 or later **and** genre contains "metal" (Metal, Metalcore, …) |
+  | Modern Breakdown | released 2010 or later **and** metal/metalcore (iTunes genre contains "metal", or style contains "metal"/"core") |
   | 70s–80s Legends | released 1970–1989 |
   | Quick Riff Blitz | duration < 3:30 |
 - A results count (e.g. "Showing 24 of 142 tracks") and an empty-state message when nothing matches.
@@ -79,7 +88,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ### b) `/tracks/:id` — Track Details (Detail View)
 
 - Reads `id` from the URL with `useParams`.
-- Shows **high-resolution album artwork** (upgraded to 600×600), track title, artist, album, **release year**, **duration formatted as `mm:ss`**, genre, and an explicit badge if applicable.
+- Shows **high-resolution album artwork** (upgraded to 600×600), track title, artist, album, **release year**, **duration formatted as `mm:ss`**, genre, **style/subgenre**, **band origin** (flag + country), and an explicit badge if applicable.
+- **Guitar Riff Tab panel**, next to the Amp Console: a monospaced 6-string tab (`e B G D A E` lines) with **tuning** (e.g. "Drop C (C G C F A D)"), suggested **BPM**, and **difficulty**. It's labelled as a *practice riff in the track's style* (e.g. "Metalcore practice riff"), not a transcription of the recording.
 - **Amp Console Player** (signature feature 2): an HTML5 `<audio>` element for the 30-second `previewUrl`, routed through the Web Audio API:
   - Custom play/pause and progress controls, styled like an amp.
   - A **real-time frequency bar visualizer** (`<canvas>` driven by an `AnalyserNode`).
@@ -121,26 +131,28 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 1. **When I** open `/`, **I see** a loading message, and then a grid of rock/metal track cards fetched from the iTunes API.
 2. **When I** open `/` while the network request fails, **I see** an error message that explains the problem, plus a "Try again" button.
 3. **When I** type "metallica" into the search box, **I see** the list immediately narrow to tracks whose title, artist, or album contains "metallica", ignoring case.
-4. **When I** choose a genre or artist from the filters, **I see** only matching tracks, along with an updated results count.
+4. **When I** choose an Origin Country, Style, or Artist from the filters, **I see** only matching tracks, along with an updated results count.
 5. **When I** choose "Longest duration" in the sort selector, **I see** the cards reordered from the longest track to the shortest.
 6. **When I** search for something with no matches, **I see** a "No tracks match your filters" message instead of an empty page.
 7. **When I** click the "Atmospheric & Epic" mood pill, **I see** it highlighted and only tracks of 5:00 or longer. **When I** click it again, **I see** the full list return.
-8. **When I** click a track card, **I see** the `/tracks/:id` page with 600×600 artwork, artist, album, release year, a `mm:ss` duration, and genre.
+8. **When I** click a track card, **I see** the `/tracks/:id` page with 600×600 artwork, artist, album, release year, a `mm:ss` duration, genre, style, and the band's origin flag and country.
 9. **When I** press play on the Amp Console, **I see** the frequency bars move with the music. **When I** switch the EQ preset to "Bass Drop" while it plays, **I see** it marked as active, and the bass boost applies immediately without the preview restarting.
-10. **When I** visit `/tracks/123` with an id that doesn't exist, **I see** a "Track not found" message and a link back to the Vault.
-11. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
-12. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Underbill acts below, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
-13. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear setlist", **I see** the poster and runtime update immediately.
-14. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** whether I was right, along with my updated score and streak.
-15. **When I** pick two tracks in the Head-to-Head section, **I see** their duration, release year, explicit rating, and album track count side by side, with the higher value in each row highlighted.
-16. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
-17. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
+10. **When I** open a metalcore track's detail page, **I see** a Guitar Riff Tab panel with a "Drop C" tuning, a BPM, a difficulty, and six aligned tab lines labelled e, B, G, D, A, E.
+11. **When I** type "australia" or "thrash" into the search box, **I see** only tracks by Australian bands or with a Thrash Metal style.
+12. **When I** visit `/tracks/123` with an id that doesn't exist, **I see** a "Track not found" message and a link back to the Vault.
+13. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
+14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Underbill acts below, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
+15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear setlist", **I see** the poster and runtime update immediately.
+16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** whether I was right, along with my updated score and streak.
+17. **When I** pick two tracks in the Head-to-Head section, **I see** their duration, release year, explicit rating, and album track count side by side, with the higher value in each row highlighted.
+18. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
+19. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
 
 ## 7. Non-Functional Requirements
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint`, and `npm test` all pass with zero errors.
-- **Testing:** at least 6 meaningful unit tests covering the real logic in `src/utils/trackUtils.ts`.
+- **Testing:** at least 8–10 meaningful unit tests (Vitest) covering the real logic in `src/utils/` — formatting, normalization, enrichment, filtering, moods, sorting, and riff tabs.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 
@@ -150,7 +162,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 - Playing full tracks (previews only — 30 seconds, provided by Apple).
 - Syncing the setlist across devices (`localStorage` only).
 - Third-party UI, audio, or state-management libraries.
-- Features beyond the four signature features (e.g. stats dashboards, random-track rollers, playlists export).
+- Features beyond the four signature features and three enrichments (e.g. stats dashboards, random-track rollers, playlists export).
+- Transcribed tabs of the actual recordings (the riff tab is a style-based practice riff).
 
 ## 9. Further Reading
 

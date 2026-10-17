@@ -4,7 +4,9 @@
 
 **Rules (see [AGENTS.md](AGENTS.md)):** one task at a time, in order. At the end of each task, stop and explain what changed in 3 sentences. The developer reviews and runs `git commit`; the agent never commits.
 
-**Signature features (exactly four, nothing extra):** ① Sonic Mood Capsules (Task 4 helper, Task 5 UI) · ② Amp Console Player (Task 5) · ③ Festival Poster Builder (Task 6) · ④ Riff Blind-Test Challenge (Task 7).
+**Signature features (exactly four, nothing extra):** ① Sonic Mood Capsules (Task 4 logic, Task 5 UI) · ② Amp Console Player (Task 5) · ③ Festival Poster Builder (Task 6) · ④ Riff Blind-Test Challenge (Task 7).
+
+**Music-data enrichments:** Band Origin & Style, Country/Style filtering, and the 6-String Guitar Riff Tab (Task 4 logic and tests, Task 5 UI).
 
 ---
 
@@ -50,39 +52,43 @@
 
 ---
 
-## Task 4 — Vitest setup, Mood Capsule helper, and unit tests
+## Task 4 — Music-data enrichments, Mood Capsule logic, Vitest, and unit tests
 
-- [ ] **Goal:** Prove the core logic works, with automated tests.
-- **Files:** `package.json`, `vite.config.ts` (or `vitest.config.ts`), `src/types/track.ts`, `src/utils/trackUtils.ts`, `src/utils/trackUtils.test.ts`
+- [ ] **Goal:** Enrich the track model, finish the pure logic for moods, filters and riff tabs, and prove it all works with automated tests.
+- **Files:** `package.json`, `src/types/track.ts`, `src/types/riff.ts`, `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/api/itunes.ts`, `src/data/mockTracks.json`, `src/utils/trackUtils.test.ts`
 - **Steps:**
-  1. Run `npm install -D vitest @vitest/ui`.
-  2. Add the scripts `"test": "vitest run"` and `"test:ui": "vitest --ui"`.
-  3. Add the `MoodId` / `MoodCapsule` types and `MOOD_CAPSULES`, `matchesMood`, and `filterByMood` to `trackUtils.ts` (signature ①, logic only).
-  4. Write **at least 6** tests in `src/utils/trackUtils.test.ts`, using `mockTracks.json` as the fixture. They should cover real logic:
-     - `formatDuration`: `245000 → "04:05"`, zero-padding, ≥ 1 hour, invalid input → `"00:00"`
-     - `upgradeArtworkUrl`: `100x100bb` → `600x600bb`; non-matching URLs are left unchanged
-     - `filterTracks`: case-insensitive search across title/artist/album, genre filter, and the combined (AND) behavior
-     - `sortTracks`: duration and year ordering, and the original array is not mutated
-     - `getTotalDuration`: the setlist total, and `0` for an empty list
-     - `normalizeTracks`: drops entries without a `previewUrl` and de-duplicates by `trackId`
-     - `filterByMood`: each of the 4 moods, including boundaries (exactly 5:00, exactly 3:30, 1969/1970/1989/1990, 2010 non-metal) and `null` = no filter
-- **Done when:** `npm test` runs at least 6 passing tests with zero failures (including the mood tests), and `npm run test:ui` opens the Vitest UI.
+  1. **Band origin & style:** add the `OriginCountry`, `Subgenre`, and `ArtistMetadata` types, and add `originCountry`, `originFlag`, and `subgenre` to `Track`. Create `artistMetadata.ts`, a curated artist map with case/qualifier/collaboration-tolerant lookup and a deterministic "Unknown" + genre-derived fallback. `normalizeTrack` enriches every track.
+  2. **Tighter catalog:** drop "Alternative" from the genre allowlist and add `isVaultTrack` (allowlisted genre **or** curated artist), used by `fetchCatalog`.
+  3. **Moods & filters** (signature ①, logic only): add `MoodId` / `MoodCapsule`, `MOOD_CAPSULES`, and `matchesMood`. Extend `TrackFilters` with `country`, `subgenre`, and `mood` (Style replaces the coarse genre filter). `filterTracks` applies all of them, and search also matches subgenre and country. Add `getUniqueCountries` and `getUniqueSubgenres`.
+  4. **Guitar Riff Tab:** add `src/types/riff.ts` (`GuitarRiffTab`, …) and `riffTabs.ts` (style profiles, templates, `renderTab`, and `getTrackRiffTab`). These are style-based practice riffs, not transcriptions.
+  5. Add a 10th fixture track (AC/DC, Australia) so country filters cover three countries.
+  6. Run `npm install -D vitest @vitest/ui`, then add the scripts `"test": "vitest run"` and `"test:ui": "vitest --ui"`.
+  7. Write **8–10+ meaningful tests** in `src/utils/trackUtils.test.ts`, using `mockTracks.json` (loaded through `parseSearchResults`) plus edge cases:
+     - `formatDuration` (`mm:ss`, ≥ 1 hour, invalid input) and `getTotalDuration` (setlist total, empty list)
+     - `upgradeArtworkUrl` (`100x100bb` → `600x600bb`, custom size, non-matching URLs)
+     - `parseSearchResults`, `normalizeTrack`, `normalizeTracks` / `dedupeTracks` (duplicate `trackId`s, unplayable entries)
+     - Origin/style enrichment (curated, case/qualifier/collaboration matching, Unknown fallback) and `isVaultTrack`
+     - `filterTracks` by search (incl. subgenre and country), origin country, style, artist, and combined AND
+     - All 4 Sonic Mood Capsules, including boundaries (exactly 5:00 and 3:30; 1969/1970/1989/1990; 2009/2010; non-metal)
+     - `sortTracks` (ordering, no mutation) and `getTrackRiffTab` / `renderTab` (tuning by style, six aligned lines, determinism, two-digit frets)
+- **Done when:** `npm test` runs 8–10+ passing tests with zero failures; `npm run test:ui` opens the Vitest UI; and `npm run build` and `npm run lint` pass with zero `any`.
 
 ---
 
-## Task 5 — Catalog components, Mood Capsules UI, and the Amp Console
+## Task 5 — Catalog components, Mood Capsules UI, Amp Console, and Riff Tab panel
 
-- [ ] **Goal:** Make the catalog interactive and give the detail page its signature player.
-- **Files:** `src/components/TrackCard.tsx`, `src/components/FilterBar.tsx`, `src/components/MoodCapsules.tsx`, `src/components/AudioPreviewPlayer.tsx`, `src/hooks/useAmpConsole.ts`, `src/types/audio.ts`, `src/utils/audioUtils.ts` (+ tests), `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`
+- [ ] **Goal:** Make the catalog interactive, and give the detail page its signature player and riff tab.
+- **Files:** `src/components/TrackCard.tsx`, `src/components/FilterBar.tsx`, `src/components/MoodCapsules.tsx`, `src/components/AudioPreviewPlayer.tsx`, `src/components/RiffTabPanel.tsx`, `src/hooks/useAmpConsole.ts`, `src/types/audio.ts`, `src/utils/audioUtils.ts` (+ tests), `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`
 - **Steps:**
-  1. Build `TrackCard`: artwork, title, artist, album, duration, and an explicit badge. It links to the detail page.
-  2. Build `FilterBar`: a controlled search input, genre select, artist select, sort select, and a results count. Every control has a `<label>`.
+  1. Build `TrackCard`: artwork, title, artist, album, origin flag, style, duration, and an explicit badge. It links to the detail page.
+  2. Build `FilterBar`: a controlled search input, Origin Country select (flag + name), Style/Subgenre select, Artist select, sort select, and a results count. Every control has a `<label>`.
   3. Build `MoodCapsules` (signature ①): 4 toggle pills with `aria-pressed`; clicking the active pill clears it.
-  4. In `CatalogPage`, keep `filters` and `mood` in `useState`, and derive the visible list with `useMemo(sortTracks(filterByMood(filterTracks(...), mood), sort))`. Show an `empty` `StatusMessage` when nothing matches.
+  4. In `CatalogPage`, keep `filters: TrackFilters` (including `mood`) in `useState`, and derive the visible list with `useMemo(sortTracks(filterTracks(tracks, filters), filters.sort))`. Show an `empty` `StatusMessage` when nothing matches.
   5. Add `EQ_PRESETS` and `bucketFrequencies` to `audioUtils.ts`, with tests.
   6. Write the `useAmpConsole` hook. It creates the `AudioContext` lazily on the first play, then wires the source → lowshelf/peaking/highshelf filters → analyser → destination. Preset changes use `setTargetAtTime`, and the hook cleans up the animation frame and context on unmount.
   7. Build `AudioPreviewPlayer` as the Amp Console (signature ②): `<audio crossOrigin="anonymous">`, play/pause and progress controls, a `<canvas>` frequency-bar visualizer, and 4 EQ preset buttons (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`). It replaces the placeholder player on `TrackDetailPage`.
-- **Done when:** typing in the search box filters the cards live; the genre and artist filters, the mood pills, and every sort option work together; the results count updates; "no matches" shows the empty state; the detail page plays the preview with moving frequency bars; switching EQ presets mid-play changes the sound without restarting it; and `npm test` passes.
+  8. Build `RiffTabPanel`: a monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty, labelled as a practice riff in the track's style. Show it on `TrackDetailPage` next to the Amp Console, along with the origin flag/country and style in the track facts.
+- **Done when:** typing in the search box filters the cards live (including by style or country); the country, style, and artist filters, the mood pills, and every sort option work together; the results count updates; "no matches" shows the empty state; the detail page plays the preview with moving frequency bars; switching EQ presets mid-play changes the sound without restarting it; the riff tab panel shows a correctly aligned tab with tuning, BPM, and difficulty; and `npm test` passes.
 
 ---
 

@@ -1,10 +1,15 @@
 import type {
   ITunesExplicitness,
   ITunesTrackRaw,
+  MoodCapsule,
+  MoodId,
+  OriginCountry,
   SortKey,
+  Subgenre,
   Track,
   TrackFilters,
 } from '../types/track'
+import { COUNTRY_FLAGS, findArtistMetadata, getArtistMetadata } from './artistMetadata'
 
 // ---------- Formatting ----------
 
@@ -90,12 +95,14 @@ export function parseSearchResults(data: unknown): ITunesTrackRaw[] {
 // ---------- Normalization ----------
 
 /**
- * Maps a raw iTunes result to the app's Track model.
- * Returns null for non-track results and for tracks without a preview,
- * since every track in the Vault must be playable.
+ * Maps a raw iTunes result to the app's Track model and enriches it with the band's
+ * origin country/flag and style. Returns null for non-track results and for tracks
+ * without a preview, since every track in the Vault must be playable.
  */
 export function normalizeTrack(raw: ITunesTrackRaw): Track | null {
   if (raw.wrapperType !== 'track' || !raw.previewUrl) return null
+
+  const { originCountry, subgenre } = getArtistMetadata(raw.artistName, raw.primaryGenreName)
 
   return {
     id: raw.trackId,
@@ -103,6 +110,9 @@ export function normalizeTrack(raw: ITunesTrackRaw): Track | null {
     artist: raw.artistName,
     album: raw.collectionName ?? 'Unknown album',
     genre: raw.primaryGenreName,
+    subgenre,
+    originCountry,
+    originFlag: COUNTRY_FLAGS[originCountry],
     artworkUrl: raw.artworkUrl100,
     artworkUrlLarge: upgradeArtworkUrl(raw.artworkUrl100),
     previewUrl: raw.previewUrl,
@@ -136,11 +146,12 @@ export function normalizeTracks(raws: ITunesTrackRaw[]): Track[] {
   return dedupeTracks(tracks)
 }
 
-// ---------- Filtering & sorting ----------
+// ---------- Catalog membership ----------
 
 /**
- * iTunes primary genres that belong in the Vault. Generic searches like "rock" also
+ * iTunes primary genres that always belong in the Vault. Generic searches like "rock" also
  * match "Jingle Bell Rock" or country hits, so the live catalog keeps only these.
+ * "Alternative" is deliberately absent: it mixes rock bands with pop acts (see isVaultTrack).
  */
 export const ROCK_METAL_GENRES: ReadonlySet<string> = new Set([
   'Rock',
@@ -149,18 +160,15 @@ export const ROCK_METAL_GENRES: ReadonlySet<string> = new Set([
   'Heavy Metal',
   'Hair Metal',
   'Death Metal/Black Metal',
-  'Alternative',
   'Punk',
   'Hardcore',
   'Grunge',
-  'Emo',
   'Prog-Rock/Art Rock',
   'Arena Rock',
   'Glam Rock',
   'Blues-Rock',
   'Southern Rock',
   'Psychedelic',
-  'Indie Rock',
   'Goth Rock',
 ])
 
@@ -170,24 +178,71 @@ export function isRockOrMetalGenre(genre: string): boolean {
 }
 
 /**
- * Case-insensitive search across title, artist and album, combined (AND)
- * with exact genre and artist matches. Empty filter values match everything.
+ * Decides whether a live track belongs in the Vault: its genre is on the allowlist, or its
+ * artist is a curated rock/metal band (so Linkin Park's "Alternative" tracks stay while
+ * pop-leaning "Alternative" acts like twenty one pilots are left out).
  */
-export function filterTracks(
-  tracks: Track[],
-  filters: Pick<TrackFilters, 'search' | 'genre' | 'artist'>,
-): Track[] {
+export function isVaultTrack(track: Pick<Track, 'genre' | 'artist'>): boolean {
+  return isRockOrMetalGenre(track.genre) || findArtistMetadata(track.artist) !== null
+}
+
+// ---------- Sonic Mood Capsules ----------
+
+const EPIC_MIN_MS = 5 * 60 * 1000 // 5:00
+const QUICK_MAX_MS = 3.5 * 60 * 1000 // 3:30
+const MODERN_FROM_YEAR = 2010
+
+export const MOOD_CAPSULES: readonly MoodCapsule[] = [
+  { id: 'atmospheric-epic', label: 'Atmospheric & Epic', description: 'Tracks of 5 minutes or longer' },
+  { id: 'modern-breakdown', label: 'Modern Breakdown', description: 'Metal and metalcore from 2010 onward' },
+  { id: 'legends-70s-80s', label: '70s–80s Legends', description: 'Classics released 1970–1989' },
+  { id: 'quick-riff-blitz', label: 'Quick Riff Blitz', description: 'Tracks under 3 minutes 30 seconds' },
+]
+
+/** True when a track fits a Sonic Mood Capsule. Tracks with an unknown year never match year-based moods. */
+export function matchesMood(
+  track: Pick<Track, 'durationMs' | 'releaseYear' | 'genre' | 'subgenre'>,
+  mood: MoodId,
+): boolean {
+  const year = track.releaseYear
+  switch (mood) {
+    case 'atmospheric-epic':
+      return track.durationMs >= EPIC_MIN_MS
+    case 'modern-breakdown':
+      return (
+        year !== null &&
+        year >= MODERN_FROM_YEAR &&
+        (/metal/i.test(track.genre) || /metal|core/i.test(track.subgenre))
+      )
+    case 'legends-70s-80s':
+      return year !== null && year >= 1970 && year <= 1989
+    case 'quick-riff-blitz':
+      return track.durationMs < QUICK_MAX_MS
+  }
+}
+
+// ---------- Filtering & sorting ----------
+
+/**
+ * Applies every catalog filter (combined with AND); empty values match everything:
+ * - search: case-insensitive, trimmed, over title, artist, album, subgenre and origin country
+ * - country / subgenre / artist: exact match
+ * - mood: Sonic Mood Capsule rule (see matchesMood)
+ */
+export function filterTracks(tracks: Track[], filters: Omit<TrackFilters, 'sort'>): Track[] {
   const query = filters.search.trim().toLowerCase()
 
   return tracks.filter((track) => {
     const matchesSearch =
       query === '' ||
-      [track.title, track.artist, track.album].some((field) =>
-        field.toLowerCase().includes(query),
+      [track.title, track.artist, track.album, track.subgenre, track.originCountry].some(
+        (field) => field.toLowerCase().includes(query),
       )
-    const matchesGenre = filters.genre === '' || track.genre === filters.genre
+    const matchesCountry = filters.country === '' || track.originCountry === filters.country
+    const matchesSubgenre = filters.subgenre === '' || track.subgenre === filters.subgenre
     const matchesArtist = filters.artist === '' || track.artist === filters.artist
-    return matchesSearch && matchesGenre && matchesArtist
+    const matchesMoodCapsule = filters.mood === null || matchesMood(track, filters.mood)
+    return matchesSearch && matchesCountry && matchesSubgenre && matchesArtist && matchesMoodCapsule
   })
 }
 
@@ -221,11 +276,20 @@ export function getTotalDuration(tracks: Track[]): number {
   return tracks.reduce((total, track) => total + track.durationMs, 0)
 }
 
-const uniqueSorted = (values: string[]): string[] => [...new Set(values)].sort(compareText)
+const uniqueSorted = <T extends string>(values: T[]): T[] => [...new Set(values)].sort(compareText)
 
-/** Sorted, de-duplicated genre names for the genre filter. */
-export function getUniqueGenres(tracks: Track[]): string[] {
-  return uniqueSorted(tracks.map((track) => track.genre))
+/** Sorted, de-duplicated origin countries for the country filter ("Unknown" always last). */
+export function getUniqueCountries(tracks: Track[]): OriginCountry[] {
+  const countries = uniqueSorted(tracks.map((track) => track.originCountry))
+  return [
+    ...countries.filter((country) => country !== 'Unknown'),
+    ...countries.filter((country) => country === 'Unknown'),
+  ]
+}
+
+/** Sorted, de-duplicated styles for the Style/Subgenre filter. */
+export function getUniqueSubgenres(tracks: Track[]): Subgenre[] {
+  return uniqueSorted(tracks.map((track) => track.subgenre))
 }
 
 /** Sorted, de-duplicated artist names for the artist filter. */

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AudioPreviewPlayer from '../components/AudioPreviewPlayer'
 import RiffTabPanel from '../components/RiffTabPanel'
+import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
 import type { FetchStatus, Track } from '../types/track'
 import { getRiffPlayheadIndex, getTrackRiffTab } from '../utils/riffTabs'
@@ -12,15 +13,42 @@ export interface TrackDetailPageProps {
   status: FetchStatus
   error: string | null
   onRetry: () => void
+  setlist: Track[]
+  isInSetlist: (trackId: number) => boolean
+  onToggleSetlist: (track: Track) => void
 }
 
 const BACK_TO_VAULT = { label: 'Back to Vault', to: '/' }
 
-function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProps) {
+function TrackDetailPage({
+  tracks,
+  status,
+  error,
+  onRetry,
+  setlist,
+  isInSetlist,
+  onToggleSetlist,
+}: TrackDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   // Only plain digit strings are valid iTunes track ids ("12abc", "-1", "" are not).
   const trackId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
-  const track = trackId === null ? undefined : tracks.find((item) => item.id === trackId)
+  // Saved tracks are full Track objects, so they open even while the catalog is loading or offline.
+  const track =
+    trackId === null
+      ? undefined
+      : (tracks.find((item) => item.id === trackId) ?? setlist.find((item) => item.id === trackId))
+
+  if (track) {
+    // Keyed by id so playback state and the audio graph start fresh for every track.
+    return (
+      <TrackDetailView
+        key={track.id}
+        track={track}
+        inSetlist={isInSetlist(track.id)}
+        onToggleSetlist={() => onToggleSetlist(track)}
+      />
+    )
+  }
 
   if (status === 'loading') {
     return <StatusMessage variant="loading" message="Pulling this track from the Vault…" />
@@ -38,19 +66,14 @@ function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProp
     )
   }
 
-  if (!track) {
-    return (
-      <StatusMessage
-        variant="empty"
-        title="Track not found"
-        message={`There's no track with id "${id}" in the Vault.`}
-        action={BACK_TO_VAULT}
-      />
-    )
-  }
-
-  // Keyed by id so playback state and the audio graph start fresh for every track.
-  return <TrackDetailView key={track.id} track={track} />
+  return (
+    <StatusMessage
+      variant="empty"
+      title="Track not found"
+      message={`There's no track with id "${id}" in the Vault.`}
+      action={BACK_TO_VAULT}
+    />
+  )
 }
 
 interface Playback {
@@ -58,7 +81,13 @@ interface Playback {
   isPlaying: boolean
 }
 
-function TrackDetailView({ track }: { track: Track }) {
+interface TrackDetailViewProps {
+  track: Track
+  inSetlist: boolean
+  onToggleSetlist: () => void
+}
+
+function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewProps) {
   const [playback, setPlayback] = useState<Playback>({ seconds: 0, isPlaying: false })
   const riffTab = useMemo(() => getTrackRiffTab(track), [track])
 
@@ -100,6 +129,9 @@ function TrackDetailView({ track }: { track: Track }) {
             )}
           </h1>
           <p className="track-artist">{track.artist}</p>
+          <div>
+            <SetlistButton trackTitle={track.title} inSetlist={inSetlist} onToggle={onToggleSetlist} />
+          </div>
 
           <dl className="track-facts">
             <div>

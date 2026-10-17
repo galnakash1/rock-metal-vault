@@ -193,3 +193,52 @@ Ran npm test and npm run test:ui in the browser and verified all 37 unit tests p
 > I left the Task 5 checkbox for you to tick. I've stopped here, and I'll start Task 6 when you give the go-ahead.
 > </pasted_content id="5dbb">
 Tested FilterBar (search, mood pills, country/style/artist filters) and listened to the Amp Console EQ presets with the synced 6-string guitar riff tab on TrackDetailPage. Marked Task 5 as done in tasks.md.
+**11:59 · claude**
+
+> <pasted_content id="5dbb">
+> Task 5 is verified and committed—the catalog filters, Amp Console EQ, visualizer, and guitar riff tabs work great.
+> 
+> Now please proceed with **Task 6** from `tasks.md` ONLY:
+> 1. Build `src/components/SetlistButton.tsx`:
+>    - A clean, accessible button component that toggles whether a `Track` is in the user's saved festival setlist (without triggering parent card navigation when clicked inside `TrackCard`).
+>    - Wire `SetlistButton` into both `TrackCard.tsx` and `TrackDetailPage.tsx`.
+> 2. Add `localStorage` persistence and setlist management in `App.tsx` (with pure helper functions in `src/utils/` so they are unit-tested):
+>    - Safely load the saved `Track[]` setlist from `localStorage` on initial mount (handling malformed or missing storage gracefully) and save changes back to `localStorage`.
+>    - Pass the live setlist count to `Navbar.tsx` so the badge updates immediately.
+>    - Provide handlers to toggle a track, remove a track, and clear the entire setlist.
+> 3. Build `src/pages/SetlistPage.tsx` (our **Festival Lineup & Poster Builder**):
+>    - When the setlist is empty, render `StatusMessage` with a clear prompt and a link/button back to `/` to start recruiting bands.
+>    - When tracks are saved, render:
+>      a) **Poster Theme Switcher**: 3 selectable visual themes (`Foggy Woodland`, `Blood Moon`, `Vintage Tour`) that change the poster's styling/palette.
+>      b) **Stylized Festival Poster**: Automatically groups the saved artists into **HEADLINERS** (top tier in large display typography) and **MAIN STAGE / UNDERBILL** (supporting tier), displaying band origin flags, styles, and summary stats (total tracks, unique artists, total festival runtime).
+>      c) **Interactive Running Order (Tracklist)**: Lists the saved tracks in order with formatted durations, links to `/tracks/:id`, individual remove buttons, and a "Clear Lineup" action.
+> 4. Add unit tests in `src/utils/trackUtils.test.ts` (or a setlist test block) covering the setlist toggle, poster tier grouping (Headliners vs. Underbill), and `localStorage` parsing helpers, and verify `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`.
+> 
+> Stop after completing Task 6 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+
+**12:14 · claude**
+
+> <pasted_content id="5dbb">
+> Task 6 looks great. Before we commit and move to Task 7, we want to significantly expand the diversity of our live catalog in `src/services/itunes.ts` and `src/utils/artistMetadata.ts` so the app features a rich global spectrum of Rock & Metal countries, scenes, and subgenres:
+> 
+> 1. **Add Israeli, Scandinavian, and Global Metal Bands & Styles:**
+>    - **Israel (`"Israel"`, `"🇮🇱"`):** Orphaned Land (`"Oriental / Folk Metal"`), Walkways (`"Metalcore"`), Scardust (`"Progressive Metal"`), Betzefer (`"Groove Metal"`), Subterranean Masquerade (`"Progressive Metal"`), Melechesh (`"Black Metal"`).
+>    - **Sweden (`"Sweden"`, `"🇸🇪"`):** Opeth (`"Progressive Metal"`), In Flames (`"Melodic Death Metal"`), Amon Amarth (`"Melodic Death Metal"`), Meshuggah (`"Djent / Extreme Metal"`), Ghost (`"Heavy Metal"`), Arch Enemy (`"Melodic Death Metal"`), Sabaton (`"Power Metal"`), Katatonia (`"Doom Metal"`), At The Gates (`"Melodic Death Metal"`), Dark Tranquillity (`"Melodic Death Metal"`), Soilwork (`"Melodic Death Metal"`), Avatar (`"Groove Metal"`), Bathory (`"Black Metal"`).
+>    - **Finland (`"Finland"`, `"🇫🇮"`):** Nightwish (`"Symphonic Metal"`), Children of Bodom (`"Melodic Death Metal"`), Insomnium (`"Melodic Death Metal"`), Amorphis (`"Progressive Metal"`), Apocalyptica (`"Symphonic Metal"`), Sonata Arctica (`"Power Metal"`), Swallow the Sun (`"Doom Metal"`), Korpiklaani (`"Folk Metal"`), Wintersun (`"Melodic Death Metal"`).
+>    - **Norway (`"Norway"`, `"🇳🇴"`):** Dimmu Borgir (`"Symphonic Black Metal"`), Emperor (`"Black Metal"`), Leprous (`"Progressive Metal"`), Satyricon (`"Black Metal"`), Wardruna (`"Nordic Folk"`), Enslaved (`"Progressive Black Metal"`), Kvelertak (`"Black 'n' Roll"`).
+>    - **Denmark (`"Denmark"`, `"🇩🇰"`) & Iceland (`"Iceland"`, `"🇮🇸"`):** Volbeat (`"Heavy Metal"`), Myrkur (`"Black Metal"`), Sólstafir (`"Post-Metal"`), KALEO (`"Blues Rock"`).
+>    - **More Global Powerhouses:** France 🇫🇷 (Gojira `"Groove Metal"`, Alcest `"Post-Metal"`), Germany 🇩🇪 (Rammstein `"Industrial Metal"`, Kreator `"Thrash Metal"`, Blind Guardian `"Power Metal"`, Helloween `"Power Metal"`, Electric Callboy `"Metalcore"`, Scorpions `"Hard Rock"`), Ukraine 🇺🇦 (Jinjer `"Progressive Metal"`), Poland 🇵🇱 (Behemoth `"Blackened Death Metal"`, Riverside `"Progressive Rock"`), Netherlands 🇳🇱 (Epica `"Symphonic Metal"`, Within Temptation `"Symphonic Metal"`), Switzerland 🇨🇭 (Eluveitie `"Folk Metal"`), Greece 🇬🇷 (Septicflesh `"Symphonic Death Metal"`, Rotting Christ `"Black Metal"`), Brazil 🇧🇷 (Sepultura `"Groove Metal"`, Angra `"Power Metal"`), Japan 🇯🇵 (BABYMETAL `"Kawaii Metal"`, Crystal Lake `"Metalcore"`), Canada 🇨🇦 (Spiritbox `"Metalcore"`, Devin Townsend `"Progressive Metal"`, Rush `"Progressive Rock"`).
+> 
+> 2. **Upgrade `src/services/itunes.ts` Query Strategy & Rate-Limit Protection:**
+>    - Because generic queries (`rock`, `metal`, `metalcore`) mostly return US/UK mainstream acts, expand `itunes.ts` to also fetch targeted queries that surface Scandinavian, Israeli, and global subgenre tracks from Apple iTunes (test the queries to make sure they return real tracks from these bands and stay well within Apple's rate limit).
+>    - Add an in-memory + `sessionStorage` cache (and in-flight request deduplication so React `StrictMode` double-mount only fires the network batch once per session, while the "Retry" button bypasses cache).
+>    - Update `isRockOrMetalGenre` / normalization so legitimate metal/rock tracks by bands in our curated `artistMetadata` map are always kept even if Apple labels an album under `"World"`, `"Singer/Songwriter"`, or `"Electronic"` (e.g., Orphaned Land or Wardruna).
+> 
+> 3. **Verify Everything:**
+>    - Update or add unit tests in `src/utils/trackUtils.test.ts` verifying Israeli and Scandinavian band enrichment.
+>    - Verify in headless Chrome that the live catalog now shows 15+ countries (including Israel 🇮🇱, Sweden 🇸🇪, Finland 🇫🇮, Norway 🇳🇴, etc.) and 12+ styles in the `FilterBar` dropdowns, and that `npm test`, `npm run build`, and `npm run lint` pass with zero errors.
+> 
+> Stop after completing this catalog expansion and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Tested the Festival Lineup & Poster Builder (/setlist) and verified the expanded catalog (292 tracks across 19 countries including Israel and Scandinavia). Noted 3 UX issues during browser testing to fix next: initial load time, filter state resetting on back navigation, and keeping audio playing across pages.

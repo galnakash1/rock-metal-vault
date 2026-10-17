@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { fetchCatalog } from './api/itunes'
 import Navbar from './components/Navbar'
@@ -8,6 +8,13 @@ import NotFoundPage from './pages/NotFoundPage'
 import SetlistPage from './pages/SetlistPage'
 import TrackDetailPage from './pages/TrackDetailPage'
 import type { FetchStatus, Track } from './types/track'
+import {
+  getBrowserStorage,
+  loadSetlist,
+  removeTrackFromList,
+  saveSetlist,
+  toggleTrackInList,
+} from './utils/setlistUtils'
 import './App.css'
 
 function App() {
@@ -20,7 +27,8 @@ function App() {
   useEffect(() => {
     const controller = new AbortController()
 
-    fetchCatalog(controller.signal)
+    // Retry (requestId > 0) bypasses the session cache; the first load may be served from it.
+    fetchCatalog({ signal: controller.signal, forceRefresh: requestId > 0 })
       .then((catalog) => {
         if (controller.signal.aborted) return
         setTracks(catalog)
@@ -46,18 +54,39 @@ function App() {
     setRequestId((id) => id + 1)
   }
 
-  // Placeholder until useSetlist() provides the real count in Task 6.
-  const setlistCount = 0
+  // ---- Festival setlist, persisted in localStorage ----
+  const [setlist, setSetlist] = useState<Track[]>(() => loadSetlist(getBrowserStorage()))
+
+  useEffect(() => {
+    saveSetlist(getBrowserStorage(), setlist)
+  }, [setlist])
+
+  const setlistIds = useMemo(() => new Set(setlist.map((track) => track.id)), [setlist])
+  const isInSetlist = useCallback((trackId: number) => setlistIds.has(trackId), [setlistIds])
+  const toggleSetlistTrack = useCallback((track: Track) => {
+    setSetlist((current) => toggleTrackInList(current, track))
+  }, [])
+  const removeSetlistTrack = useCallback((trackId: number) => {
+    setSetlist((current) => removeTrackFromList(current, trackId))
+  }, [])
+  const clearSetlist = useCallback(() => setSetlist([]), [])
 
   return (
     <BrowserRouter>
-      <Navbar setlistCount={setlistCount} />
+      <Navbar setlistCount={setlist.length} />
       <main className="app">
         <Routes>
           <Route
             path="/"
             element={
-              <CatalogPage tracks={tracks} status={status} error={error} onRetry={handleRetry} />
+              <CatalogPage
+                tracks={tracks}
+                status={status}
+                error={error}
+                onRetry={handleRetry}
+                isInSetlist={isInSetlist}
+                onToggleSetlist={toggleSetlistTrack}
+              />
             }
           />
           <Route
@@ -68,10 +97,22 @@ function App() {
                 status={status}
                 error={error}
                 onRetry={handleRetry}
+                setlist={setlist}
+                isInSetlist={isInSetlist}
+                onToggleSetlist={toggleSetlistTrack}
               />
             }
           />
-          <Route path="/setlist" element={<SetlistPage />} />
+          <Route
+            path="/setlist"
+            element={
+              <SetlistPage
+                setlist={setlist}
+                onRemove={removeSetlistTrack}
+                onClear={clearSetlist}
+              />
+            }
+          />
           <Route
             path="/arena"
             element={

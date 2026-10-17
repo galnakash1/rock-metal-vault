@@ -30,7 +30,7 @@
 - **Steps:**
   1. Run `npm install react-router-dom`.
   2. In `App.tsx`, wrap the layout in `<BrowserRouter>` and define `<Routes>` for `/`, `/tracks/:id`, `/setlist`, `/arena`, and `*`.
-  3. Build `Navbar` with `NavLink`s (Vault Catalog `/`, Festival Poster `/setlist`, Riff Arena `/arena`) that highlight the active route, plus a setlist count badge (0 until `useSetlist` arrives in Task 6).
+  3. Build `Navbar` with `NavLink`s (Vault Catalog `/`, Festival Poster `/setlist`, Riff Arena `/arena`) that highlight the active route, plus a setlist count badge (0 until the setlist arrives in Task 6).
   4. Move the static list into `CatalogPage` (`.map()` with `key={track.id}`), with each item linking to `/tracks/${track.id}` via `Link`.
   5. Make `TrackDetailPage` read `id` with `useParams` and receive `tracks` via props. It shows 600×600 artwork, title, artist, album, release year, `mm:ss` duration, genre, and an explicit badge, plus a basic `<audio controls>` placeholder for the Task 5 Amp Console. Unknown ids show a "Track not found" message.
   6. Add shell pages for the Festival Poster (`/setlist`) and Riff Arena (`/arena`), and a real 404 page.
@@ -95,15 +95,27 @@
 
 ## Task 6 — Setlist with `localStorage` and the Festival Poster Builder
 
-- [ ] **Goal:** Let users build a persistent setlist and turn it into a festival poster.
-- **Files:** `src/hooks/useSetlist.ts`, `src/components/SetlistButton.tsx`, `src/components/FestivalPoster.tsx`, `src/pages/SetlistPage.tsx`, `src/components/TrackCard.tsx`, `src/pages/TrackDetailPage.tsx`, `src/App.tsx`, `src/types/track.ts`, `src/utils/trackUtils.ts` (+ tests)
+- [x] **Goal:** Let users build a persistent setlist and turn it into a festival poster.
+- **Files:** `src/utils/setlistUtils.ts` (+ `setlistUtils.test.ts`), `src/types/track.ts`, `src/components/SetlistButton.tsx`, `src/components/FestivalPoster.tsx`, `src/pages/SetlistPage.tsx`, `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`, `src/App.tsx`, `src/App.css`
 - **Steps:**
-  1. Add `parseStoredSetlist`, `toggleTrackInList`, and `buildFestivalLineup` (plus the `LineupAct`, `FestivalLineup`, and `PosterTheme` types) to `trackUtils.ts`, with unit tests.
-  2. Write the `useSetlist()` hook: lazy init from `localStorage` (`rmv:setlist`), sync back in `useEffect`, and expose `isInSetlist`, `toggleTrack`, `removeTrack`, and `clearSetlist`. Call it in `App` and feed the real count to the `Navbar` badge.
-  3. Build `SetlistButton` (Add / Remove toggle with `aria-pressed`), and use it on `TrackCard` and `TrackDetailPage`. The detail page also falls back to the setlist when an id isn't in the catalog.
-  4. Build `FestivalPoster` (signature ③): Headliners in large type, Underbill below, total festival runtime, and act and track counts, themed via `data-theme`.
-  5. Build `SetlistPage`: a poster theme switcher (`Hellfire` / `Frostbite` / `Toxic Waste`), the poster, a compact manage list with Remove buttons, a "Clear setlist" button with confirmation, and an empty state.
-- **Done when:** adding and removing from cards and the detail page updates the button and the Navbar badge immediately; the poster shows the correct Headliner/Underbill split and runtime; switching themes restyles the poster instantly; the lineup survives a page reload; Remove and Clear update the poster; and `npm test` passes, including the new tests.
+  1. Add `setlistUtils.ts`, with unit tests: `toggleTrackInList`, `removeTrackFromList`, `reviveStoredTrack` / `parseStoredSetlist`, `getBrowserStorage` / `loadSetlist` / `saveSetlist`, `POSTER_THEMES`, `getHeadlinerCount`, and `buildFestivalLineup`. Also add the `PosterTheme`, `LineupAct`, and `FestivalLineup` types.
+  2. In `App.tsx`, lazily load the setlist from `localStorage` (`rmv:setlist`), save it back in `useEffect`, and pass `isInSetlist`, toggle, remove, and clear handlers down as props. The `Navbar` badge shows `setlist.length`.
+  3. Build `SetlistButton` ("Add to Setlist" / "Remove from Setlist"; never triggers card navigation), and use it in the `TrackCard` `actions` slot and on `TrackDetailPage`. The detail page also falls back to the setlist when an id isn't in the catalog.
+  4. Build `FestivalPoster` (signature ③): Headliners in large display type, the Main Stage underbill, origin flags + styles, and tracks/bands/runtime stats, themed via `data-theme`.
+  5. Build `SetlistPage`: a poster theme switcher (`Foggy Woodland` / `Blood Moon` / `Vintage Tour`), the poster, the running order (durations, detail links, Remove buttons), a "Clear Lineup" button with confirmation, and an empty state linking back to `/`.
+- **Done when:** adding and removing from cards and the detail page updates the button and the Navbar badge immediately; the poster shows the correct Headliner/Main Stage split and runtime; switching themes restyles the poster instantly; the lineup survives a page reload; Remove and Clear update the poster; and `npm test` passes, including the new tests.
+
+---
+
+## Catalog expansion (between Tasks 6 and 7) — Global bands, smarter fetching
+
+- [ ] **Goal:** A rich global spectrum of rock & metal countries, scenes, and styles, without hitting Apple's rate limit.
+- **Files:** `src/types/track.ts`, `src/types/riff.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/utils/trackUtils.ts`, `src/utils/setlistUtils.ts`, `src/utils/catalogCache.ts` (+ test), `src/api/itunes.ts` (+ test), `src/App.tsx`, `src/utils/trackUtils.test.ts`
+- **Steps:**
+  1. Add ~60 international bands (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada) with their styles and Apple artist ids, plus 10 new countries and 14 new styles (with riff families for black metal and doom).
+  2. Track `artistId`. Enrichment matches by id first, then by accent-insensitive name, and rejects off-genre namesakes. Curated bands are always kept, even under "World"/"Electronic" genres.
+  3. `fetchCatalog`: 3 searches + 1 multi-artist Lookup request, a 15 s timeout, partial-failure tolerance, memory + `sessionStorage` cache, shared in-flight batch (StrictMode fires once), and Retry bypassing the cache.
+- **Done when:** the live catalog shows 15+ countries (incl. Israel, Sweden, Finland, Norway) and 12+ styles in the `FilterBar`, with one network batch per session; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 

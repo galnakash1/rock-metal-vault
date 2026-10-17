@@ -11,6 +11,8 @@ export type RiffFamily =
   | 'nu-metal'
   | 'alt-metal'
   | 'thrash'
+  | 'black-metal'
+  | 'doom'
   | 'heavy-metal'
   | 'progressive'
   | 'hard-rock'

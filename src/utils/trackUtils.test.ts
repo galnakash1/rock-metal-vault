@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import mockData from '../data/mockTracks.json'
 import type { ITunesTrackRaw, Subgenre, Track, TrackFilters } from '../types/track'
-import { getArtistMetadata } from './artistMetadata'
+import { ARTIST_ENTRIES, COUNTRY_FLAGS, SPOTLIGHT_ARTIST_IDS, getArtistMetadata, normalizeArtistKey } from './artistMetadata'
 import {
   GUITAR_STRINGS,
   RIFF_PROFILES,
@@ -66,6 +66,7 @@ const makeTrack = (overrides: Partial<Track> = {}): Track => ({
   id: 1,
   title: 'Test Riff',
   artist: 'Test Band',
+  artistId: null,
   album: 'Test Album',
   genre: 'Metal',
   subgenre: 'Heavy Metal',
@@ -257,12 +258,104 @@ describe('band origin & subgenre enrichment', () => {
 })
 
 describe('isVaultTrack (genre allowlist)', () => {
+  const vault = (genre: string, artist: string, artistId: number | null = null): boolean =>
+    isVaultTrack({ genre, artist, artistId })
+
   it('keeps allowlisted genres and curated bands, and drops pop-leaning "Alternative" acts', () => {
-    expect(isVaultTrack({ genre: 'Metal', artist: 'Unlisted Band' })).toBe(true)
-    expect(isVaultTrack({ genre: 'Alternative', artist: 'LINKIN PARK' })).toBe(true)
-    expect(isVaultTrack({ genre: 'Pop', artist: 'Procol Harum' })).toBe(true)
-    expect(isVaultTrack({ genre: 'Alternative', artist: 'twenty one pilots' })).toBe(false)
-    expect(isVaultTrack({ genre: 'Holiday', artist: 'Bobby Helms' })).toBe(false)
+    expect(vault('Metal', 'Unlisted Band')).toBe(true)
+    expect(vault('Alternative', 'LINKIN PARK')).toBe(true)
+    expect(vault('Pop', 'Procol Harum')).toBe(true)
+    expect(vault('Alternative', 'twenty one pilots')).toBe(false)
+    expect(vault('Holiday', 'Bobby Helms')).toBe(false)
+  })
+
+  it('always keeps curated bands whatever Apple files the album under', () => {
+    expect(vault('World', 'Orphaned Land', 18243552)).toBe(true)
+    expect(vault('Worldwide', 'Wardruna', 299406921)).toBe(true)
+    expect(vault('Singer/Songwriter', 'KALEO', 960112019)).toBe(true)
+    expect(vault('Electronic', 'Electric Callboy', 387883325)).toBe(true)
+  })
+
+  it('drops off-genre namesakes of curated bands (different Apple artist id)', () => {
+    expect(vault('Hip-Hop/Rap', 'Ghost', 1437662124)).toBe(false)
+    expect(vault('Electronic', 'Avatar', 1606749621)).toBe(false)
+    expect(vault('Metal', 'Ghost', 600730426)).toBe(true)
+  })
+
+  it('still matches a curated band under a second Apple id when the genre is rock/metal', () => {
+    expect(getArtistMetadata('Within Temptation', 'Hard Rock', 1730759079).originCountry).toBe(
+      'Netherlands',
+    )
+  })
+})
+
+describe('international band enrichment', () => {
+  it('tags Israeli bands with Israel 🇮🇱 and their style', () => {
+    expect(getArtistMetadata('Orphaned Land', 'World')).toEqual({
+      originCountry: 'Israel',
+      subgenre: 'Oriental / Folk Metal',
+    })
+    expect(getArtistMetadata('Walkways', 'Metal').subgenre).toBe('Metalcore')
+    expect(getArtistMetadata('Scardust', 'Rock').subgenre).toBe('Progressive Metal')
+    expect(getArtistMetadata('Melechesh', 'Metal').subgenre).toBe('Black Metal')
+    expect(COUNTRY_FLAGS.Israel).toBe('🇮🇱')
+  })
+
+  it('tags Scandinavian and Nordic bands by country and style', () => {
+    expect(getArtistMetadata('Opeth', 'Metal')).toEqual({ originCountry: 'Sweden', subgenre: 'Progressive Metal' })
+    expect(getArtistMetadata('Meshuggah', 'Metal').subgenre).toBe('Djent / Extreme Metal')
+    expect(getArtistMetadata('Nightwish', 'Hard Rock')).toEqual({ originCountry: 'Finland', subgenre: 'Symphonic Metal' })
+    expect(getArtistMetadata('Korpiklaani', 'Metal').subgenre).toBe('Folk Metal')
+    expect(getArtistMetadata('Dimmu Borgir', 'Metal')).toEqual({ originCountry: 'Norway', subgenre: 'Symphonic Black Metal' })
+    expect(getArtistMetadata('Kvelertak', 'Hard Rock').subgenre).toBe("Black 'n' Roll")
+    expect(getArtistMetadata('Myrkur', 'Metal').originCountry).toBe('Denmark')
+    expect(getArtistMetadata('Sólstafir', 'Metal')).toEqual({ originCountry: 'Iceland', subgenre: 'Post-Metal' })
+  })
+
+  it('covers the wider global scene', () => {
+    const origin = (artist: string) => getArtistMetadata(artist, 'Metal').originCountry
+    expect(origin('Jinjer')).toBe('Ukraine')
+    expect(origin('Behemoth')).toBe('Poland')
+    expect(origin('Epica')).toBe('Netherlands')
+    expect(origin('Eluveitie')).toBe('Switzerland')
+    expect(origin('Septicflesh')).toBe('Greece')
+    expect(origin('Sepultura')).toBe('Brazil')
+    expect(getArtistMetadata('BABYMETAL', 'Metal')).toEqual({ originCountry: 'Japan', subgenre: 'Kawaii Metal' })
+    expect(getArtistMetadata('GOJIRA', 'Metal')).toEqual({ originCountry: 'France', subgenre: 'Groove Metal' })
+  })
+
+  it('matches by Apple artist id first, then by accent-insensitive name', () => {
+    // Apple credits Sólstafir's songs as "Solstafir", and BABYMETAL's as collaborations.
+    expect(getArtistMetadata('Solstafir', 'Metal').originCountry).toBe('Iceland')
+    expect(getArtistMetadata('BABYMETAL & Electric Callboy', 'Metal', 477101776)).toEqual({
+      originCountry: 'Japan',
+      subgenre: 'Kawaii Metal',
+    })
+    expect(normalizeArtistKey('Motörhead')).toBe('motorhead')
+  })
+
+  it('enriches a normalized track by artist id and rejects a namesake', () => {
+    const raw = rawByName('Paranoid')
+    const opeth = normalizeTrack({ ...raw, artistName: 'Opeth', artistId: 3196120 })
+    expect(opeth).toMatchObject({ artistId: 3196120, originCountry: 'Sweden', originFlag: '🇸🇪' })
+    // The hip-hop "Ghost" (different artist id, non-rock genre) must not become Sweden's Ghost.
+    const namesake = normalizeTrack({
+      ...raw,
+      artistName: 'Ghost',
+      artistId: 1437662124,
+      primaryGenreName: 'Hip-Hop/Rap',
+    })
+    expect(namesake).toMatchObject({ originCountry: 'Unknown', originFlag: '🌐', subgenre: 'Rock' })
+  })
+
+  it('keeps the curated map consistent: unique names, a flag for every country, unique ids', () => {
+    const keys = ARTIST_ENTRIES.map(([name]) => normalizeArtistKey(name))
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const [, country] of ARTIST_ENTRIES) expect(COUNTRY_FLAGS[country]).toBeTruthy()
+    expect(new Set(SPOTLIGHT_ARTIST_IDS).size).toBe(SPOTLIGHT_ARTIST_IDS.length)
+    expect(SPOTLIGHT_ARTIST_IDS.length).toBeGreaterThanOrEqual(60)
+    const countries = new Set(ARTIST_ENTRIES.map(([, country]) => country))
+    expect(countries.size).toBeGreaterThanOrEqual(19)
   })
 })
 

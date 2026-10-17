@@ -25,7 +25,7 @@ The app has exactly **four** signature features. To keep the UI clean and unclut
 | --- | --- | --- | --- |
 | 1 | **Sonic Mood Capsules** | `/` | Mood filter pills above the track list, powered by a pure, unit-tested helper |
 | 2 | **Amp Console Player** | `/tracks/:id` | HTML5 + Web Audio API preview player with a live frequency-bar visualizer and Rock/Metal EQ presets |
-| 3 | **Festival Lineup & Poster Builder** | `/setlist` | Saved tracks become a festival poster with Headliner and Underbill tiers, total runtime, and switchable themes |
+| 3 | **Festival Lineup & Poster Builder** | `/setlist` | Saved tracks become a festival poster with Headliners and a Main Stage underbill, origin flags, stats, and switchable themes |
 | 4 | **Riff Blind-Test Challenge** | `/arena` | Guess the track from its preview while blurred artwork slowly sharpens, with score and streak, plus a head-to-head comparison |
 
 Supporting the features above are three **music-data enrichments**, which add data rather than extra UI:
@@ -56,10 +56,11 @@ Supporting the features above are three **music-data enrichments**, which add da
 https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
-- The catalog is built from three searches (`rock`, `metal`, `metalcore`) that are merged and de-duplicated by `trackId`.
-- Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band. iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
-- **Band origin & style enrichment:** Apple's `country` field is the storefront ("USA"), not where a band formed. During normalization, each track is enriched from a curated map of ~120 rock/metal/metalcore artists with `originCountry` + `originFlag` (United States 🇺🇸, United Kingdom 🇬🇧, Sweden 🇸🇪, Germany 🇩🇪, Australia 🇦🇺, France 🇫🇷, Canada 🇨🇦, Finland 🇫🇮, Denmark 🇩🇰) and a `subgenre` (Metalcore, Thrash Metal, Hard Rock, …). Unlisted artists fall back deterministically to **"Unknown" 🌐** (a country is never guessed) and a style derived from the iTunes genre.
-- Fields used: `trackId`, `trackName`, `artistName`, `collectionName`, `artworkUrl100`, `previewUrl`, `trackTimeMillis`, `primaryGenreName`, `releaseDate`, `trackExplicitness`, `trackCount`.
+- The catalog is built from **4 requests per browser session**: three broad searches (`rock`, `metal`, `metalcore`) for the mainstream, plus one **Lookup API** call (`https://itunes.apple.com/lookup?id=…&entity=song&limit=3`) that fetches 3 songs from each of ~60 curated international bands by Apple artist id (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada). Results are merged and de-duplicated by `trackId` (about 290 tracks, 19 countries, 30+ styles).
+- **Rate-limit protection:** the catalog is cached in memory and in `sessionStorage` (30 minutes), and concurrent loads (e.g. React StrictMode's double mount) share one in-flight batch, so reloads and page switches make no requests. **Retry** bypasses the cache. If some requests fail, the rest still load the catalog.
+- Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band — whatever Apple files the album under (Orphaned Land, Wardruna and KALEO may be "World", "Worldwide", or "Alternative"). iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
+- **Band origin & style enrichment:** Apple's `country` field is the storefront ("USA"), not where a band formed. During normalization, each track is enriched from a curated map of ~170 rock/metal/metalcore artists with `originCountry` + `originFlag` (19 countries, from United States 🇺🇸 and United Kingdom 🇬🇧 to Israel 🇮🇱, Sweden 🇸🇪, Finland 🇫🇮, Norway 🇳🇴, Iceland 🇮🇸, Ukraine 🇺🇦, Brazil 🇧🇷 and Japan 🇯🇵) and a `subgenre` (Metalcore, Melodic Death Metal, Black Metal, Oriental / Folk Metal, Kawaii Metal, …). Matching uses Apple's **artist id** first (so a hip-hop "Ghost" never becomes Sweden's Ghost), then the accent- and case-insensitive name. Unlisted artists fall back deterministically to **"Unknown" 🌐** (a country is never guessed) and a style derived from the iTunes genre.
+- Fields used: `trackId`, `artistId`, `trackName`, `artistName`, `collectionName`, `artworkUrl100`, `previewUrl`, `trackTimeMillis`, `primaryGenreName`, `releaseDate`, `trackExplicitness`, `trackCount`.
 - Artwork is upgraded from `100x100` to `600x600` by rewriting the URL (`…/100x100bb.jpg` → `…/600x600bb.jpg`).
 - Results without a `previewUrl` are dropped, because every track in the Vault must be playable.
 - Apple rate-limits the API (roughly 20 requests per minute), so the catalog is fetched **once** per page load and shared across all pages.
@@ -104,12 +105,14 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 - Saved tracks are persisted in `localStorage`, so they survive page reloads.
 - **Festival Poster** (signature feature 3): the saved tracks are grouped by artist into acts and shown as a stylized festival poster:
-  - **Headliners:** the top acts (up to 3, about the top third), ranked by number of saved tracks, then by total runtime. They get big type at the top of the poster.
-  - **Underbill:** every other act, in smaller type below.
-  - **Total festival runtime** (`h:mm:ss` / `mm:ss`) and the act and track counts.
-  - **Poster theme switcher:** `Hellfire` (red/black), `Frostbite` (icy blue), and `Toxic Waste` (acid green). The poster restyles instantly.
-- **Manage setlist:** a compact list under the poster with a link to each track's details and a **Remove** button. A **Clear setlist** button (with a confirmation step) empties it.
-- An empty state ("Your lineup is empty — go find some riffs") links to the catalog.
+  - **Headliners:** the top acts (up to 3, about the top third), ranked by number of saved tracks, then by total runtime, then name. They get big display type at the top of the poster.
+  - **Main Stage (underbill):** every other act, in smaller type below.
+  - Each act shows its **origin flag + country** and **style**.
+  - **Summary stats:** total tracks, bands, and total festival runtime (`h:mm:ss` / `mm:ss`).
+  - **Poster theme switcher:** `Foggy Woodland` (misty greens), `Blood Moon` (black sky, crimson moon), and `Vintage Tour` (cream paper and ink). The poster restyles instantly.
+- **Running order:** the saved tracks in the order they were added, with artwork, formatted durations, links to `/tracks/:id`, and a **Remove** button each. A **Clear Lineup** button (with a confirmation step) empties it.
+- An empty state ("Your lineup is empty") links back to the catalog.
+- **Add to Setlist** buttons on every track card and on the detail page toggle a track in and out of the setlist without navigating away. Saved tracks open on `/tracks/:id` even when the catalog is still loading or the API is down.
 
 ### d) `/arena` — Riff Arena
 
@@ -143,7 +146,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 11. **When I** type "australia" or "thrash" into the search box, **I see** only tracks by Australian bands or with a Thrash Metal style.
 12. **When I** visit `/tracks/123` with an id that doesn't exist, **I see** a "Track not found" message and a link back to the Vault.
 13. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
-14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Underbill acts below, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
+14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Main Stage acts below, origin flags and styles, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
 15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear setlist", **I see** the poster and runtime update immediately.
 16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** whether I was right, along with my updated score and streak.
 17. **When I** pick two tracks in the Head-to-Head section, **I see** their duration, release year, explicit rating, and album track count side by side, with the higher value in each row highlighted.

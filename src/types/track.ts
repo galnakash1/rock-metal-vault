@@ -7,6 +7,7 @@ export interface ITunesTrackRaw {
   wrapperType: string // "track" for songs
   kind?: string // "song"
   trackId: number
+  artistId?: number // Apple's artist id — tells namesakes apart (e.g. two bands called "Ghost")
   trackName: string
   artistName: string
   collectionName?: string
@@ -38,7 +39,17 @@ export type OriginCountry =
   | 'France'
   | 'Canada'
   | 'Finland'
+  | 'Norway'
   | 'Denmark'
+  | 'Iceland'
+  | 'Israel'
+  | 'Netherlands'
+  | 'Switzerland'
+  | 'Poland'
+  | 'Ukraine'
+  | 'Greece'
+  | 'Brazil'
+  | 'Japan'
   | 'Unknown' // artist isn't in the curated map
 
 export type Subgenre =
@@ -55,7 +66,21 @@ export type Subgenre =
   | 'Melodic Death Metal'
   | 'Power Metal'
   | 'Symphonic Metal'
+  | 'Symphonic Death Metal'
+  | 'Black Metal'
+  | 'Symphonic Black Metal'
+  | 'Progressive Black Metal'
+  | 'Blackened Death Metal'
+  | "Black 'n' Roll"
+  | 'Doom Metal'
+  | 'Post-Metal'
+  | 'Djent / Extreme Metal'
+  | 'Folk Metal'
+  | 'Oriental / Folk Metal'
+  | 'Nordic Folk'
+  | 'Kawaii Metal'
   | 'Hard Rock'
+  | 'Blues Rock'
   | 'Classic Rock'
   | 'Progressive Rock'
   | 'Alternative Rock'
@@ -79,6 +104,7 @@ export interface Track {
   id: number // iTunes trackId — unique across the catalog
   title: string
   artist: string
+  artistId: number | null // Apple's artist id (null for tracks saved before it was tracked)
   album: string
   genre: string // iTunes primaryGenreName, e.g. "Metal"
   subgenre: Subgenre // enriched style, e.g. "Thrash Metal"
@@ -132,3 +158,31 @@ export interface TrackFilters {
 // ---------- Async state ----------
 
 export type FetchStatus = 'loading' | 'error' | 'success'
+
+// ---------- Festival Lineup & Poster ----------
+
+export type PosterTheme = 'foggy-woodland' | 'blood-moon' | 'vintage-tour'
+
+export interface PosterThemeOption {
+  id: PosterTheme
+  label: string // e.g. "Blood Moon"
+  description: string
+}
+
+/** One band on the poster: every saved track by that artist. */
+export interface LineupAct {
+  artist: string
+  originCountry: OriginCountry
+  originFlag: string
+  subgenre: Subgenre
+  tracks: Track[]
+  runtimeMs: number
+}
+
+export interface FestivalLineup {
+  headliners: LineupAct[] // top tier, large type
+  underbill: LineupAct[] // Main Stage / supporting tier
+  trackCount: number
+  artistCount: number
+  totalRuntimeMs: number
+}

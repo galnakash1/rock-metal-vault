@@ -73,6 +73,7 @@ export function isITunesTrackRaw(value: unknown): value is ITunesTrackRaw {
     typeof value.primaryGenreName === 'string' &&
     typeof value.releaseDate === 'string' &&
     EXPLICITNESS_VALUES.has(value.trackExplicitness) &&
+    isOptional(value.artistId, 'number') &&
     isOptional(value.collectionName, 'string') &&
     isOptional(value.previewUrl, 'string') &&
     isOptional(value.trackTimeMillis, 'number') &&
@@ -102,12 +103,18 @@ export function parseSearchResults(data: unknown): ITunesTrackRaw[] {
 export function normalizeTrack(raw: ITunesTrackRaw): Track | null {
   if (raw.wrapperType !== 'track' || !raw.previewUrl) return null
 
-  const { originCountry, subgenre } = getArtistMetadata(raw.artistName, raw.primaryGenreName)
+  const artistId = raw.artistId ?? null
+  const { originCountry, subgenre } = getArtistMetadata(
+    raw.artistName,
+    raw.primaryGenreName,
+    artistId,
+  )
 
   return {
     id: raw.trackId,
     title: raw.trackName,
     artist: raw.artistName,
+    artistId,
     album: raw.collectionName ?? 'Unknown album',
     genre: raw.primaryGenreName,
     subgenre,
@@ -179,11 +186,15 @@ export function isRockOrMetalGenre(genre: string): boolean {
 
 /**
  * Decides whether a live track belongs in the Vault: its genre is on the allowlist, or its
- * artist is a curated rock/metal band (so Linkin Park's "Alternative" tracks stay while
- * pop-leaning "Alternative" acts like twenty one pilots are left out).
+ * artist is a curated rock/metal band — whatever Apple files the album under. So Linkin Park's
+ * "Alternative", Wardruna's "Worldwide" or Orphaned Land's "World" tracks stay, while
+ * pop-leaning acts and namesakes of curated bands (matched by artist id) are left out.
  */
-export function isVaultTrack(track: Pick<Track, 'genre' | 'artist'>): boolean {
-  return isRockOrMetalGenre(track.genre) || findArtistMetadata(track.artist) !== null
+export function isVaultTrack(track: Pick<Track, 'genre' | 'artist' | 'artistId'>): boolean {
+  return (
+    isRockOrMetalGenre(track.genre) ||
+    findArtistMetadata(track.artist, track.artistId, track.genre) !== null
+  )
 }
 
 // ---------- Sonic Mood Capsules ----------

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import FilterBar from '../components/FilterBar'
+import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
 import TrackCard from '../components/TrackCard'
 import type { FetchStatus, Track, TrackFilters } from '../types/track'
@@ -19,9 +20,18 @@ export interface CatalogPageProps {
   status: FetchStatus
   error: string | null
   onRetry: () => void
+  isInSetlist: (trackId: number) => boolean
+  onToggleSetlist: (track: Track) => void
 }
 
-function CatalogPage({ tracks, status, error, onRetry }: CatalogPageProps) {
+function CatalogPage({
+  tracks,
+  status,
+  error,
+  onRetry,
+  isInSetlist,
+  onToggleSetlist,
+}: CatalogPageProps) {
   const [filters, setFilters] = useState<TrackFilters>(DEFAULT_FILTERS)
 
   // Everything below is derived from tracks + filters — never stored in state.
@@ -98,7 +108,17 @@ function CatalogPage({ tracks, status, error, onRetry }: CatalogPageProps) {
             <ul className="track-grid">
               {visibleTracks.map((track) => (
                 <li key={track.id}>
-                  <TrackCard track={track} />
+                  <TrackCard
+                    track={track}
+                    actions={
+                      <SetlistButton
+                        variant="compact"
+                        trackTitle={track.title}
+                        inSetlist={isInSetlist(track.id)}
+                        onToggle={() => onToggleSetlist(track)}
+                      />
+                    }
+                  />
                 </li>
               ))}
             </ul>

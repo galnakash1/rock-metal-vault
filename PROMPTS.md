@@ -84,3 +84,23 @@ Checked the app in the browser with npm run dev (all 9 tracks and total duration
 > Stop after completing Task 2 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Tested all routes in the browser (/, /tracks/:id, /setlist, /arena, and invalid URLs for 404/unknown track ID). Confirmed audio preview plays on the detail page and marked Task 2 as done in tasks.md.
+## 2026-10-17
+
+**10:42 · claude**
+
+> <pasted_content id="5dbb">
+> Your decisions from Task 2 are all approved (keeping catalog search, genre/artist filters, and sorting is essential, and dropping `StatCard`/stats dashboard keeps the Arena focused on the Riff Blind-Test and Head-to-Head comparison). Also, if Task 5 feels large later, we can still execute it cleanly in one well-structured step as written in `tasks.md`.
+> 
+> Now please proceed with **Task 3** from `tasks.md` ONLY:
+> 1. Create the reusable `StatusMessage` component in `src/components/StatusMessage.tsx` to cleanly present Loading, Error (with a functional "Retry" button callback), and Empty states.
+> 2. In `App.tsx` (or via a dedicated fetch helper called inside `useEffect` in `App.tsx`), replace the static mock data initialization with live `fetch()` requests inside `useEffect` querying the public Apple iTunes Search API for our rock/metal/metalcore catalog.
+> 3. Properly manage the three required screen states (`loading`, `error`, `success` / data ready):
+>    - Use `AbortController` cleanup in `useEffect` (or safe state handling) so unmounting/re-fetching never causes console warnings.
+>    - Normalize and deduplicate the combined API results using our `trackUtils` functions so every track has a unique `id` and valid fields.
+>    - Pass a retry handler so if the network fails, clicking "Retry" in `StatusMessage` re-triggers the fetch.
+>    - Keep `src/data/mockTracks.json` in the repo so we can use it as deterministic fixture data for our Vitest unit tests in Task 4.
+> 4. Ensure zero `any` types and verify that `npm run build` and `npm run lint` pass with zero errors.
+> 
+> Stop after completing Task 3 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Verified live iTunes API fetch in the browser (129 rock/metal tracks loaded cleanly) and tested loading, empty, and error retry states via StatusMessage. Marked Task 3 as done in tasks.md.

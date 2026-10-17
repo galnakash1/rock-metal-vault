@@ -23,7 +23,7 @@
 
 ## Task 2 — Routing, Navbar, and the detail page
 
-- [ ] **Goal:** Turn the single view into a multi-page SPA.
+- [x] **Goal:** Turn the single view into a multi-page SPA.
 - **Files:** `package.json`, `src/App.tsx`, `src/components/Navbar.tsx`, `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`, `src/pages/SetlistPage.tsx`, `src/pages/ArenaPage.tsx`, `src/pages/NotFoundPage.tsx`, `src/App.css`
 - **Steps:**
   1. Run `npm install react-router-dom`.
@@ -38,13 +38,13 @@
 
 ## Task 3 — Real data from the iTunes API with Loading / Error / Data states
 
-- [ ] **Goal:** Replace the mock data with live data, handling every async state.
-- **Files:** `src/api/itunes.ts`, `src/hooks/useTracks.ts`, `src/components/StatusMessage.tsx`, `src/App.tsx`, the pages
+- [x] **Goal:** Replace the mock data with live data, handling every async state.
+- **Files:** `src/api/itunes.ts`, `src/utils/trackUtils.ts`, `src/components/StatusMessage.tsx`, `src/App.tsx`, the pages
 - **Steps:**
-  1. In `src/api/itunes.ts`, write `fetchCatalog(signal)`. It fetches `rock`, `metal`, and `metalcore` (`media=music&entity=song&limit=50`) in parallel, checks `response.ok`, then normalizes and de-duplicates the results by `trackId`.
-  2. Write the `useTracks()` hook: `fetch` inside `useEffect`, with an `AbortController` cleanup, returning `{ status, tracks, error, retry }`.
+  1. In `src/api/itunes.ts`, write `fetchCatalog(signal)`. It fetches `rock`, `metal`, and `metalcore` (`media=music&entity=song&limit=50`) in parallel, checks `response.ok`, validates the bodies (`parseSearchResults`), normalizes and de-duplicates the results by `trackId`, and keeps only rock/metal-family genres (`isRockOrMetalGenre` allowlist).
+  2. In `App.tsx`, call `fetchCatalog` inside `useEffect` with an `AbortController` cleanup, holding `tracks`, `status`, and `error` in state, plus a `requestId` counter that Retry bumps to re-run the effect.
   3. Build the reusable `StatusMessage` component (`loading` / `error` with an optional retry / `empty`).
-  4. Call `useTracks()` once in `App`, and pass the results down as props to Catalog, Detail, and Arena.
+  4. Pass `tracks`, `status`, `error`, and `onRetry` down as props to Catalog, Detail, and Arena.
   5. Keep `mockTracks.json` as the test fixture only; the UI no longer imports it.
 - **Done when:** the catalog shows a loading message, then the real iTunes tracks with no duplicate-key warnings in the console; with the network turned off (DevTools → Offline), a friendly error with a working "Try again" button appears; and the detail page works for live track ids.
 

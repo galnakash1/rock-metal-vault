@@ -111,6 +111,64 @@
   text-decoration: none;
 }
 
+/* ---------- Status messages ---------- */
+.status-message {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.status-message--error {
+  border-color: var(--accent);
+}
+
+.status-title {
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-spinner {
+    animation-duration: 3s;
+  }
+}
+
+.button {
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* ---------- Catalog list ---------- */
 .track-list {
   list-style: none;

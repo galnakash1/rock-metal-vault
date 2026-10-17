@@ -1,26 +1,47 @@
 import { Link, useParams } from 'react-router-dom'
-import type { Track } from '../types/track'
+import StatusMessage from '../components/StatusMessage'
+import type { FetchStatus, Track } from '../types/track'
 import { formatDuration } from '../utils/trackUtils'
 
 export interface TrackDetailPageProps {
   tracks: Track[]
+  status: FetchStatus
+  error: string | null
+  onRetry: () => void
 }
 
-function TrackDetailPage({ tracks }: TrackDetailPageProps) {
+const BACK_TO_VAULT = { label: 'Back to Vault', to: '/' }
+
+function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   // Only plain digit strings are valid iTunes track ids ("12abc", "-1", "" are not).
   const trackId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
   const track = trackId === null ? undefined : tracks.find((item) => item.id === trackId)
 
+  if (status === 'loading') {
+    return <StatusMessage variant="loading" message="Pulling this track from the Vault…" />
+  }
+
+  if (status === 'error') {
+    return (
+      <StatusMessage
+        variant="error"
+        title="Couldn't load this track"
+        message={error ?? 'Something went wrong while loading the Vault.'}
+        onRetry={onRetry}
+        action={BACK_TO_VAULT}
+      />
+    )
+  }
+
   if (!track) {
     return (
-      <section className="empty-state">
-        <h1>Track not found</h1>
-        <p>There's no track with id "{id}" in the Vault.</p>
-        <Link to="/" className="button-link">
-          Back to Vault
-        </Link>
-      </section>
+      <StatusMessage
+        variant="empty"
+        title="Track not found"
+        message={`There's no track with id "${id}" in the Vault.`}
+        action={BACK_TO_VAULT}
+      />
     )
   }
 

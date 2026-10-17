@@ -1,4 +1,10 @@
-import type { ITunesTrackRaw, SortKey, Track, TrackFilters } from '../types/track'
+import type {
+  ITunesExplicitness,
+  ITunesTrackRaw,
+  SortKey,
+  Track,
+  TrackFilters,
+} from '../types/track'
 
 // ---------- Formatting ----------
 
@@ -34,6 +40,51 @@ export function upgradeArtworkUrl(url: string, size = 600): string {
 export function getReleaseYear(isoDate: string): number | null {
   const year = new Date(isoDate).getUTCFullYear()
   return Number.isNaN(year) ? null : year
+}
+
+// ---------- API response validation ----------
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const isOptional = (value: unknown, type: 'string' | 'number'): boolean =>
+  value === undefined || typeof value === type
+
+const EXPLICITNESS_VALUES: ReadonlySet<unknown> = new Set<ITunesExplicitness>([
+  'explicit',
+  'notExplicit',
+  'cleaned',
+])
+
+/** Runtime check that an unknown API result has the fields (and types) ITunesTrackRaw promises. */
+export function isITunesTrackRaw(value: unknown): value is ITunesTrackRaw {
+  return (
+    isRecord(value) &&
+    typeof value.wrapperType === 'string' &&
+    typeof value.trackId === 'number' &&
+    typeof value.trackName === 'string' &&
+    typeof value.artistName === 'string' &&
+    typeof value.artworkUrl100 === 'string' &&
+    typeof value.primaryGenreName === 'string' &&
+    typeof value.releaseDate === 'string' &&
+    EXPLICITNESS_VALUES.has(value.trackExplicitness) &&
+    isOptional(value.collectionName, 'string') &&
+    isOptional(value.previewUrl, 'string') &&
+    isOptional(value.trackTimeMillis, 'number') &&
+    isOptional(value.trackCount, 'number')
+  )
+}
+
+/**
+ * Validates a parsed iTunes Search response body and returns its well-formed results.
+ * Throws if the body isn't shaped like `{ results: [...] }`; malformed entries are skipped.
+ */
+export function parseSearchResults(data: unknown): ITunesTrackRaw[] {
+  if (!isRecord(data) || !Array.isArray(data.results)) {
+    throw new Error('The iTunes API returned an unexpected response.')
+  }
+  const results: unknown[] = data.results
+  return results.filter(isITunesTrackRaw)
 }
 
 // ---------- Normalization ----------
@@ -86,6 +137,37 @@ export function normalizeTracks(raws: ITunesTrackRaw[]): Track[] {
 }
 
 // ---------- Filtering & sorting ----------
+
+/**
+ * iTunes primary genres that belong in the Vault. Generic searches like "rock" also
+ * match "Jingle Bell Rock" or country hits, so the live catalog keeps only these.
+ */
+export const ROCK_METAL_GENRES: ReadonlySet<string> = new Set([
+  'Rock',
+  'Hard Rock',
+  'Metal',
+  'Heavy Metal',
+  'Hair Metal',
+  'Death Metal/Black Metal',
+  'Alternative',
+  'Punk',
+  'Hardcore',
+  'Grunge',
+  'Emo',
+  'Prog-Rock/Art Rock',
+  'Arena Rock',
+  'Glam Rock',
+  'Blues-Rock',
+  'Southern Rock',
+  'Psychedelic',
+  'Indie Rock',
+  'Goth Rock',
+])
+
+/** True when a genre is on the rock/metal allowlist (exact, case-sensitive iTunes names). */
+export function isRockOrMetalGenre(genre: string): boolean {
+  return ROCK_METAL_GENRES.has(genre)
+}
 
 /**
  * Case-insensitive search across title, artist and album, combined (AND)

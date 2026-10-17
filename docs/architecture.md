@@ -21,10 +21,9 @@ src/
 │   └── mockTracks.json       # 9 rock/metal tracks in raw iTunes shape (Task 1; later a test fixture)
 │
 ├── api/
-│   └── itunes.ts             # fetchCatalog(): calls the iTunes Search API, returns Track[]
+│   └── itunes.ts             # fetchCatalog(signal): 3 parallel searches → validated, normalized Track[]
 │
 ├── hooks/
-│   ├── useTracks.ts          # Fetches the catalog in useEffect → { status, tracks, error, retry }
 │   ├── useSetlist.ts         # Setlist state, synced to localStorage
 │   └── useAmpConsole.ts      # Web Audio graph (EQ filters + analyser) for the Amp Console
 │
@@ -60,7 +59,7 @@ src/
 **Components** are reusable building blocks. They get data and callbacks through props and never fetch catalog data themselves.
 
 ```
-<App>                                             owns: useTracks(), useSetlist()
+<App>                                             owns: catalog fetch (useEffect), useSetlist()
 └── <BrowserRouter>
     ├── <Navbar setlistCount />
     └── <Routes>
@@ -99,7 +98,7 @@ src/
 | `FilterBar` | Controlled search input, genre `<select>`, artist `<select>`, sort `<select>`, results count | `filters`, `genres`, `artists`, `onChange`, `resultCount`, `totalCount` |
 | `MoodCapsules` | Row of toggle pills (`aria-pressed`) built from `MOOD_CAPSULES`; clicking the active pill clears it | `activeMood: MoodId \| null`, `onChange` |
 | `AudioPreviewPlayer` | **Amp Console:** `<audio crossOrigin="anonymous">` + custom play/pause/progress, `<canvas>` frequency bars, and EQ preset buttons; uses `useAmpConsole` | `src`, `title` |
-| `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `onRetry?`, `action?` |
+| `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `action?` |
 | `SetlistButton` | Add / Remove toggle with an `aria-pressed` state; stops click propagation when used inside a card link | `inSetlist`, `onToggle` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large), Underbill (small), runtime, and counts; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
 | `BlindTestGame` | Round flow (start → listen → guess → reveal → next), blurred artwork, 4 option buttons, score/streak | `tracks` |
@@ -272,6 +271,7 @@ export interface FestivalPosterProps {
 export interface StatusMessageProps {
   variant: 'loading' | 'error' | 'empty'
   message: string
+  title?: string
   onRetry?: () => void
   action?: { label: string; to: string }   // e.g. "Back to Vault" → "/"
 }
@@ -287,7 +287,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 | State | Lives in | Why | Flows to |
 | --- | --- | --- | --- |
-| Catalog `tracks`, `status`, `error` | `App` via `useTracks()` | Needed by Catalog, Detail, and Arena; fetched **once** (rate limits) and shared | Props → pages |
+| Catalog `tracks`, `status`, `error` (+ `requestId` for retries) | `App` (`useState` + `useEffect`) | Needed by Catalog, Detail, and Arena; fetched **once** (rate limits) and shared | Props → pages |
 | `setlist: Track[]` + actions | `App` via `useSetlist()` | Needed by the Navbar badge, cards, Detail, and the Setlist page | Props → `Navbar`, pages → `TrackCard` / `SetlistButton` |
 | `filters: TrackFilters` | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `FilterBar`; `onChange` callback goes back up |
 | `mood: MoodId \| null` | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `MoodCapsules` |
@@ -304,12 +304,13 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 **Data flows down via props; events flow up via callbacks** (`onChange`, `onToggleSetlist`, `onRemove`, `onClear`, `onRetry`).
 
-### `useTracks()` — data fetching
+### Catalog fetch — `useEffect` in `App` + `fetchCatalog()`
 
-- Runs `fetchCatalog(signal)` inside `useEffect`. That call makes 3 parallel requests (`rock`, `metal`, `metalcore`) with `Promise.all`, then normalizes and de-duplicates the results by `trackId` (`dedupeTracks`), so React keys are always unique.
-- Exposes `{ status: FetchStatus, tracks: Track[], error: string | null, retry: () => void }`.
-- Uses an `AbortController` in the effect cleanup, so React StrictMode's double-mount and fast navigation never update state after unmount.
-- Treats a non-OK HTTP response (`!response.ok`) as an error, not just a network failure.
+- `App` calls `fetchCatalog(signal)` inside `useEffect`. That call makes 3 parallel requests (`rock`, `metal`, `metalcore`) with `Promise.all`. It validates each body with `parseSearchResults` (dropping malformed entries), normalizes and de-duplicates the results by `trackId` (`normalizeTracks` → `dedupeTracks`) so React keys are always unique, and keeps only rock/metal-family genres (`isRockOrMetalGenre`).
+- `App` holds `tracks`, `status: FetchStatus` (initially `'loading'`), and `error: string | null`, and passes them, plus `onRetry`, to Catalog, Detail, and Arena.
+- **Retry:** `handleRetry` sets `status` back to `'loading'` and bumps a `requestId` counter, which is the effect's dependency, so the effect runs again. State is never set synchronously inside the effect body.
+- Uses an `AbortController` in the effect cleanup; results and errors that arrive after an abort are ignored. React StrictMode's double-mount and fast navigation never update state from a stale request.
+- Treats a non-OK HTTP response (`!response.ok`) as an error, not just a network failure. Network failures become a friendly "Couldn't reach the iTunes API" message (the original error is kept as `cause`).
 
 ### `useSetlist()` — persistence
 
@@ -372,9 +373,12 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `formatDuration` | `(ms?: number) => string` | `245000 → "04:05"`; zero-padded `mm:ss`; ≥ 1 hour → `"h:mm:ss"` (for runtime totals); invalid/negative/undefined → `"00:00"`; rounds down to whole seconds | ✅ Task 4 |
 | `upgradeArtworkUrl` | `(url: string, size?: number) => string` | Replaces `/\d+x\d+bb/` with `600x600bb` (default size); returns non-matching URLs unchanged | ✅ Task 4 |
 | `getReleaseYear` | `(isoDate: string) => number \| null` | Uses `getUTCFullYear()` to avoid time-zone off-by-one; `null` for invalid dates | ✅ Task 4 |
+| `isITunesTrackRaw` | `(value: unknown) => value is ITunesTrackRaw` | Runtime type guard: required fields present with the right types; `trackExplicitness` is a known value | ✅ Task 4 |
+| `parseSearchResults` | `(data: unknown) => ITunesTrackRaw[]` | Throws for a body that isn't `{ results: [...] }`; drops malformed entries | ✅ Task 4 |
 | `normalizeTrack` | `(raw: ITunesTrackRaw) => Track \| null` | Maps the API shape to `Track`; returns `null` for non-tracks or entries without `previewUrl` | ✅ Task 4 |
 | `dedupeTracks` | `(tracks: Track[]) => Track[]` | Keeps the first occurrence of each `id` (iTunes `trackId`) so merged queries never produce duplicate React keys | ✅ Task 4 |
 | `normalizeTracks` | `(raws: ITunesTrackRaw[]) => Track[]` | Normalizes, drops `null`s, de-duplicates by `id` | ✅ Task 4 |
+| `isRockOrMetalGenre` | `(genre: string) => boolean` | Exact match against the `ROCK_METAL_GENRES` allowlist (Rock, Hard Rock, Metal, Alternative, Punk, …); used by `fetchCatalog` | ✅ Task 4 |
 | `filterTracks` | `(tracks, filters: Pick<TrackFilters, 'search' \| 'genre' \| 'artist'>) => Track[]` | Case-insensitive, trimmed search across title/artist/album, combined (AND) with exact genre and artist match | ✅ Task 4 |
 | `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use `localeCompare` | ✅ Task 4 |
 | `getTotalDuration` | `(tracks: Track[]) => number` | Sum of `durationMs` (0 for an empty list) | ✅ Task 4 |

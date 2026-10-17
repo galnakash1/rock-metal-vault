@@ -49,6 +49,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
 - The catalog is built from three searches (`rock`, `metal`, `metalcore`) that are merged and de-duplicated by `trackId`.
+- Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so only tracks whose `primaryGenreName` is on a rock/metal-family allowlist (Rock, Hard Rock, Metal, Alternative, Punk, …) are kept.
 - Fields used: `trackId`, `trackName`, `artistName`, `collectionName`, `artworkUrl100`, `previewUrl`, `trackTimeMillis`, `primaryGenreName`, `releaseDate`, `trackExplicitness`, `trackCount`.
 - Artwork is upgraded from `100x100` to `600x600` by rewriting the URL (`…/100x100bb.jpg` → `…/600x600bb.jpg`).
 - Results without a `previewUrl` are dropped, because every track in the Vault must be playable.

@@ -58,3 +58,29 @@ Reviewed PRD.md, tasks.md, and docs/architecture.md. Approved combining rock, me
 > Stop after completing Task 1 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Checked the app in the browser with npm run dev (all 9 tracks and total duration rendered cleanly with no console errors). Manually updated Procol Harum's primaryGenreName from "Pop" to "Classic Rock" in mockTracks.json and marked Task 1 as done in tasks.md.
+
+## 2026-10-16
+
+**12:40 · claude**
+
+> <pasted_content id="5dbb">
+> Task 1 is verified and committed. Before executing Task 2, we want to refine our product vision so the app stands out with 4 focused signature features (and nothing extra beyond these 4 to keep the UI clean and uncluttered):
+> 
+> 1. **Sonic Mood Capsules (on `/` CatalogPage):** Quick mood filter pills above the track list (`Atmospheric & Epic` for tracks >= 5 mins, `Modern Breakdown` for 2010+ metal/metalcore, `70s–80s Legends` for 1970–1989 classics, and `Quick Riff Blitz` for tracks < 3.5 mins), supported by a pure helper function in `trackUtils.ts` so we can also unit-test it in Task 4.
+> 2. **Amp Console Player with Live EQ & Visualizer (on `/tracks/:id` TrackDetailPage):** An HTML5 + Web Audio API preview player featuring a real-time frequency bar visualizer and selectable Rock/Metal EQ presets (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`).
+> 3. **Festival Lineup & Poster Builder (on `/setlist` SetlistPage):** Turns the user's saved `localStorage` tracks into a stylized rock/metal festival poster (automatically grouping selections into Headliners and Underbill tiers, showing total festival runtime, and allowing poster theme switching).
+> 4. **Riff Blind-Test Challenge (on `/arena` ArenaPage):** An interactive audio guessing game where a random track's 30s preview plays with blurred album artwork that progressively unblurs, 4 multiple-choice buttons, score/streak tracking, plus head-to-head track comparison.
+> 
+> Please do the following now:
+> 1. Briefly update `PRD.md`, `docs/architecture.md`, and `tasks.md` to reflect these exact 4 signature features (and mark Task 1 as completed in `tasks.md`).
+> 2. Execute **Task 2** from `tasks.md` ONLY:
+>    - Install `react-router-dom`.
+>    - Create `src/components/Navbar.tsx` using `NavLink` to navigate between `/` (Vault Catalog), `/setlist` (Festival Poster), and `/arena` (Riff Arena), displaying the current setlist count badge.
+>    - Set up `BrowserRouter` and `Routes` in `App.tsx` for `/`, `/tracks/:id`, `/setlist`, `/arena`, and `*` (`NotFoundPage`).
+>    - Build `CatalogPage.tsx` (rendering the list with `.map()` and `key={track.id}`, where each item links to `/tracks/${track.id}` via `Link`) and `TrackDetailPage.tsx` (reading `:id` with `useParams()`, receiving tracks via props, rendering full track metadata, upgraded 600x600 artwork, and a clean placeholder/basic audio preview ready for the Task 5 Amp Console, plus handling unknown track IDs gracefully).
+>    - Create clean initial shell pages for `SetlistPage.tsx`, `ArenaPage.tsx`, and `NotFoundPage.tsx`.
+> 3. Ensure zero `any` types and verify `npm run build` and `npm run lint` pass with zero errors.
+> 
+> Stop after completing Task 2 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Tested all routes in the browser (/, /tracks/:id, /setlist, /arena, and invalid URLs for 404/unknown track ID). Confirmed audio preview plays on the detail page and marked Task 2 as done in tasks.md.

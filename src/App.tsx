@@ -1,46 +1,37 @@
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import Navbar from './components/Navbar'
 import mockData from './data/mockTracks.json'
+import ArenaPage from './pages/ArenaPage'
+import CatalogPage from './pages/CatalogPage'
+import NotFoundPage from './pages/NotFoundPage'
+import SetlistPage from './pages/SetlistPage'
+import TrackDetailPage from './pages/TrackDetailPage'
 import type { ITunesSearchResponse } from './types/track'
-import { formatDuration, getTotalDuration, normalizeTracks } from './utils/trackUtils'
+import { normalizeTracks } from './utils/trackUtils'
 import './App.css'
 
+// Mock catalog until Task 3 replaces it with the live iTunes fetch.
 // JSON imports infer `string` for literal-union fields like trackExplicitness,
 // so the mock is asserted to the raw API shape once, here.
-const mockResponse = mockData as ITunesSearchResponse
-const tracks = normalizeTracks(mockResponse.results)
+const tracks = normalizeTracks((mockData as ITunesSearchResponse).results)
 
 function App() {
-  return (
-    <main className="app">
-      <header className="app-header">
-        <h1>Rock &amp; Metal Vault</h1>
-        <p className="app-summary">
-          {tracks.length} tracks · {formatDuration(getTotalDuration(tracks))} total
-        </p>
-      </header>
+  // Placeholder until useSetlist() provides the real count in Task 6.
+  const setlistCount = 0
 
-      <ul className="track-list">
-        {tracks.map((track) => (
-          <li key={track.id} className="track-row">
-            <img
-              className="track-art"
-              src={track.artworkUrl}
-              alt={`${track.album} album artwork`}
-              width={100}
-              height={100}
-              loading="lazy"
-            />
-            <div className="track-info">
-              <h2 className="track-title">{track.title}</h2>
-              <p className="track-artist">{track.artist}</p>
-              <p className="track-meta">
-                {track.album} · {track.genre}
-              </p>
-            </div>
-            <span className="track-duration">{formatDuration(track.durationMs)}</span>
-          </li>
-        ))}
-      </ul>
-    </main>
+  return (
+    <BrowserRouter>
+      <Navbar setlistCount={setlistCount} />
+      <main className="app">
+        <Routes>
+          <Route path="/" element={<CatalogPage tracks={tracks} />} />
+          <Route path="/tracks/:id" element={<TrackDetailPage tracks={tracks} />} />
+          <Route path="/setlist" element={<SetlistPage />} />
+          <Route path="/arena" element={<ArenaPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </main>
+    </BrowserRouter>
   )
 }
 

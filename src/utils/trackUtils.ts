@@ -223,6 +223,27 @@ export function matchesMood(
 
 // ---------- Filtering & sorting ----------
 
+/** The catalog's starting (and "Reset filters") state: everything shown, sorted by artist. */
+export const DEFAULT_FILTERS: TrackFilters = {
+  search: '',
+  country: '',
+  subgenre: '',
+  artist: '',
+  mood: null,
+  sort: 'artist-asc',
+}
+
+/** True when any filter narrows the list (sort order alone doesn't count). */
+export function hasActiveFilters(filters: TrackFilters): boolean {
+  return (
+    filters.search.trim() !== '' ||
+    filters.country !== '' ||
+    filters.subgenre !== '' ||
+    filters.artist !== '' ||
+    filters.mood !== null
+  )
+}
+
 /**
  * Applies every catalog filter (combined with AND); empty values match everything:
  * - search: case-insensitive, trimmed, over title, artist, album, subgenre and origin country

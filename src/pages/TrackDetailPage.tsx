@@ -1,6 +1,10 @@
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import AudioPreviewPlayer from '../components/AudioPreviewPlayer'
+import RiffTabPanel from '../components/RiffTabPanel'
 import StatusMessage from '../components/StatusMessage'
 import type { FetchStatus, Track } from '../types/track'
+import { getRiffPlayheadIndex, getTrackRiffTab } from '../utils/riffTabs'
 import { formatDuration } from '../utils/trackUtils'
 
 export interface TrackDetailPageProps {
@@ -45,6 +49,28 @@ function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProp
     )
   }
 
+  // Keyed by id so playback state and the audio graph start fresh for every track.
+  return <TrackDetailView key={track.id} track={track} />
+}
+
+interface Playback {
+  seconds: number
+  isPlaying: boolean
+}
+
+function TrackDetailView({ track }: { track: Track }) {
+  const [playback, setPlayback] = useState<Playback>({ seconds: 0, isPlaying: false })
+  const riffTab = useMemo(() => getTrackRiffTab(track), [track])
+
+  const handleProgress = useCallback((seconds: number, isPlaying: boolean) => {
+    setPlayback({ seconds, isPlaying })
+  }, [])
+
+  const hasStarted = playback.isPlaying || playback.seconds > 0
+  const activeStep = hasStarted
+    ? getRiffPlayheadIndex(playback.seconds, riffTab.bpm, riffTab.columns.length, riffTab.stepsPerBeat)
+    : null
+
   return (
     <article className="track-detail">
       <Link to="/" className="back-link">
@@ -61,6 +87,10 @@ function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProp
         />
 
         <div className="track-detail-info">
+          <p className="track-detail-origin">
+            <span aria-hidden="true">{track.originFlag}</span> {track.originCountry} ·{' '}
+            <span className="style-badge">{track.subgenre}</span>
+          </p>
           <h1 className="track-detail-title">
             {track.title}
             {track.isExplicit && (
@@ -85,7 +115,17 @@ function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProp
               <dd>{formatDuration(track.durationMs)}</dd>
             </div>
             <div>
-              <dt>Genre</dt>
+              <dt>Style</dt>
+              <dd>{track.subgenre}</dd>
+            </div>
+            <div>
+              <dt>Band origin</dt>
+              <dd>
+                <span aria-hidden="true">{track.originFlag}</span> {track.originCountry}
+              </dd>
+            </div>
+            <div>
+              <dt>iTunes genre</dt>
               <dd>{track.genre}</dd>
             </div>
             {track.albumTrackCount !== null && (
@@ -95,21 +135,16 @@ function TrackDetailPage({ tracks, status, error, onRetry }: TrackDetailPageProp
               </div>
             )}
           </dl>
-
-          <section className="preview">
-            <h2>30-second preview</h2>
-            {/* Basic player — replaced by the Amp Console (AudioPreviewPlayer) in Task 5 */}
-            <audio
-              className="preview-audio"
-              controls
-              preload="none"
-              src={track.previewUrl}
-              aria-label={`Preview of ${track.title} by ${track.artist}`}
-            >
-              Your browser does not support audio playback.
-            </audio>
-          </section>
         </div>
+      </div>
+
+      <div className="track-detail-studio">
+        <AudioPreviewPlayer
+          src={track.previewUrl}
+          title={`${track.title} by ${track.artist}`}
+          onProgress={handleProgress}
+        />
+        <RiffTabPanel tab={riffTab} subgenre={track.subgenre} activeStep={activeStep} />
       </div>
     </article>
   )

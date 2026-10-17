@@ -7,10 +7,18 @@ export interface StatusMessageProps {
   message: string
   title?: string
   onRetry?: () => void
+  retryLabel?: string // defaults to "Retry"
   action?: { label: string; to: string } // e.g. "Back to Vault" → "/"
 }
 
-function StatusMessage({ variant, message, title, onRetry, action }: StatusMessageProps) {
+function StatusMessage({
+  variant,
+  message,
+  title,
+  onRetry,
+  retryLabel = 'Retry',
+  action,
+}: StatusMessageProps) {
   return (
     <div
       className={`status-message status-message--${variant}`}
@@ -24,7 +32,7 @@ function StatusMessage({ variant, message, title, onRetry, action }: StatusMessa
         <div className="status-actions">
           {onRetry && (
             <button type="button" className="button" onClick={onRetry}>
-              Retry
+              {retryLabel}
             </button>
           )}
           {action && (

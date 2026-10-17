@@ -4,8 +4,10 @@ import type {
   RiffDifficulty,
   RiffFamily,
   RiffStep,
+  TabColumn,
 } from '../types/riff'
 import type { Subgenre, Track } from '../types/track'
+import { normalizeArtistKey } from './artistMetadata'
 
 /** Tab line order: highest string on top, lowest at the bottom. */
 export const GUITAR_STRINGS: readonly GuitarString[] = ['e', 'B', 'G', 'D', 'A', 'E']
@@ -154,20 +156,26 @@ export const SUBGENRE_RIFF_FAMILIES: Record<Subgenre, RiffFamily> = {
 
 // ---------- Rendering ----------
 
+/** Splits steps into padded columns: each column is as wide as its widest fret number. */
+export function getTabColumns(steps: readonly RiffStep[]): TabColumn[] {
+  return steps.map((step) => {
+    const width = Math.max(1, ...GUITAR_STRINGS.map((string) => String(step[string] ?? '').length))
+    const cell = (string: GuitarString): string => String(step[string] ?? '').padEnd(width, '-')
+    return {
+      width,
+      cells: { e: cell('e'), B: cell('B'), G: cell('G'), D: cell('D'), A: cell('A'), E: cell('E') },
+    }
+  })
+}
+
 /**
- * Renders fret steps as six aligned tab lines ("|-0-0-3-|"). Each column is as wide as
- * its widest fret number, so two-digit frets never break alignment.
+ * Renders fret steps as six aligned tab lines ("|-0-0-3-|"). Columns are padded to their
+ * widest fret, so two-digit frets never break alignment.
  */
 export function renderTab(steps: readonly RiffStep[]): Record<GuitarString, string> {
-  const widths = steps.map((step) =>
-    Math.max(1, ...GUITAR_STRINGS.map((string) => String(step[string] ?? '').length)),
-  )
+  const columns = getTabColumns(steps)
   const renderLine = (string: GuitarString): string =>
-    '|-' +
-    steps
-      .map((step, index) => String(step[string] ?? '').padEnd(widths[index] ?? 1, '-') + '-')
-      .join('') +
-    '|'
+    '|-' + columns.map((column) => `${column.cells[string]}-`).join('') + '|'
 
   return {
     e: renderLine('e'),
@@ -179,24 +187,186 @@ export function renderTab(steps: readonly RiffStep[]): Record<GuitarString, stri
   }
 }
 
+// ---------- Signature riffs ----------
+
+interface SignatureRiff {
+  artist: string
+  title: string
+  tuning: string
+  bpm: number // approximate
+  stepsPerBeat?: number // defaults to 2 (eighth notes)
+  difficulty: RiffDifficulty
+  steps: readonly RiffStep[]
+}
+
+const STANDARD = 'E Standard (E A D G B E)'
+
 /**
- * Resolves a playable practice riff for any track, deterministically: the track's style picks
- * the tuning, difficulty and riff templates, and its id picks the template and tempo.
- * These are style-based practice riffs, not transcriptions of the recording.
+ * Simplified transcriptions of a few famous opening riffs. Only riffs we can tab reliably
+ * are listed; every other track keeps its style-based practice riff.
  */
-export function getTrackRiffTab(track: Pick<Track, 'id' | 'subgenre'>): GuitarRiffTab {
+export const SIGNATURE_RIFFS: readonly SignatureRiff[] = [
+  {
+    artist: 'Black Sabbath',
+    title: 'Iron Man',
+    tuning: STANDARD,
+    bpm: 76,
+    difficulty: 'Beginner',
+    // B5 D5 D5 E5 E5 G5 F#5 G5 F#5 G5 D5 D5 E5 E5
+    steps: [7, 10, 10, 12, 12, 15, 14, 15, 14, 15, 10, 10, 12, 12].map(powerE),
+  },
+  {
+    artist: 'AC/DC',
+    title: 'Back In Black',
+    tuning: STANDARD,
+    bpm: 94,
+    difficulty: 'Intermediate',
+    // Opening chord hits: E5 – D/F# – A/C#
+    steps: [powerE(0), powerE(0), { E: 2, A: 0, D: 0 }, { A: 4, D: 2 }],
+  },
+  {
+    artist: 'Deep Purple',
+    title: 'Smoke On the Water',
+    tuning: STANDARD,
+    bpm: 112,
+    difficulty: 'Beginner',
+    // Fourths on the D and G strings: G Bb C · G Bb Db C · G Bb C Bb G
+    steps: [0, 3, 5, 0, 3, 6, 5, 0, 3, 5, 3, 0].map((fret) => ({ D: fret, G: fret })),
+  },
+  {
+    artist: 'Nirvana',
+    title: 'Smells Like Teen Spirit',
+    tuning: STANDARD,
+    bpm: 117,
+    difficulty: 'Beginner',
+    // F5 Bb5 Ab5 Db5
+    steps: [powerE(1), powerE(1), powerA(1), powerA(1), powerE(4), powerE(4), powerA(4), powerA(4)],
+  },
+  {
+    artist: "Guns N' Roses",
+    title: "Sweet Child O' Mine",
+    tuning: 'E♭ Standard (half step down)',
+    bpm: 125,
+    stepsPerBeat: 4,
+    difficulty: 'Intermediate',
+    steps: [
+      note('D', 12),
+      note('B', 15),
+      note('G', 14),
+      note('G', 12),
+      note('e', 15),
+      note('G', 14),
+      note('e', 14),
+      note('G', 14),
+    ],
+  },
+  {
+    artist: 'Ozzy Osbourne',
+    title: 'Crazy Train',
+    tuning: STANDARD,
+    bpm: 138,
+    stepsPerBeat: 4,
+    difficulty: 'Intermediate',
+    // F# F# C# F# D F# C# F# · B A G# A B A G# E
+    steps: [
+      chug(2), chug(2), note('A', 4), chug(2), note('A', 5), chug(2), note('A', 4), chug(2),
+      note('A', 2), note('A', 0), chug(4), note('A', 0), note('A', 2), note('A', 0), chug(4), chug(0),
+    ],
+  },
+  {
+    artist: 'Metallica',
+    title: 'Nothing Else Matters',
+    tuning: STANDARD,
+    bpm: 46,
+    stepsPerBeat: 3,
+    difficulty: 'Beginner',
+    // Open-string E minor arpeggio: E G B e B G
+    steps: [chug(0), note('G', 0), note('B', 0), note('e', 0), note('B', 0), note('G', 0)],
+  },
+]
+
+/** Lowercases a title and strips "(2015 Remaster)", "[Live]" and " - Remastered" style suffixes. */
+export function normalizeTitleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/\s*[([][^)\]]*[)\]]/g, '')
+    .replace(/\s+-\s+.*$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const signatureKey = (artist: string, title: string): string =>
+  `${normalizeArtistKey(artist)}|${normalizeTitleKey(title)}`
+
+const SIGNATURE_RIFF_INDEX: ReadonlyMap<string, SignatureRiff> = new Map(
+  SIGNATURE_RIFFS.map((riff) => [signatureKey(riff.artist, riff.title), riff]),
+)
+
+/** The curated signature riff for a track, or null when it isn't one of the listed songs. */
+export function findSignatureRiff(track: Pick<Track, 'artist' | 'title'>): SignatureRiff | null {
+  return SIGNATURE_RIFF_INDEX.get(signatureKey(track.artist, track.title)) ?? null
+}
+
+// ---------- Resolver ----------
+
+const DEFAULT_STEPS_PER_BEAT = 2
+
+/**
+ * Resolves a playable riff for any track, deterministically:
+ * - listed iconic songs get their simplified signature riff (kind 'signature');
+ * - everything else gets a practice riff for its style (kind 'practice'): the style picks the
+ *   tuning, difficulty and templates, and the track id picks the template and tempo.
+ */
+export function getTrackRiffTab(
+  track: Pick<Track, 'id' | 'subgenre' | 'artist' | 'title'>,
+): GuitarRiffTab {
   const family = SUBGENRE_RIFF_FAMILIES[track.subgenre]
+  const signature = findSignatureRiff(track)
+
+  if (signature) {
+    return {
+      kind: 'signature',
+      title: `${signature.title} — signature riff`,
+      family,
+      tuning: signature.tuning,
+      bpm: signature.bpm,
+      stepsPerBeat: signature.stepsPerBeat ?? DEFAULT_STEPS_PER_BEAT,
+      difficulty: signature.difficulty,
+      columns: getTabColumns(signature.steps),
+      lines: renderTab(signature.steps),
+    }
+  }
+
   const profile = RIFF_PROFILES[family]
   const seed = Math.abs(Math.trunc(track.id))
   const template = profile.templates[seed % profile.templates.length] ?? []
   const [minBpm, maxBpm] = profile.bpmRange
 
   return {
+    kind: 'practice',
     title: `${track.subgenre} practice riff`,
     family,
     tuning: profile.tuning,
     bpm: minBpm + (seed % (maxBpm - minBpm + 1)),
+    stepsPerBeat: DEFAULT_STEPS_PER_BEAT,
     difficulty: profile.difficulty,
+    columns: getTabColumns(template),
     lines: renderTab(template),
   }
+}
+
+/**
+ * Which tab column the playhead is on after `elapsedSec` of playback, looping the riff at
+ * `bpm` with `stepsPerBeat` columns per beat. Returns null when there is nothing to highlight.
+ */
+export function getRiffPlayheadIndex(
+  elapsedSec: number,
+  bpm: number,
+  stepCount: number,
+  stepsPerBeat = DEFAULT_STEPS_PER_BEAT,
+): number | null {
+  if (stepCount <= 0 || bpm <= 0 || stepsPerBeat <= 0 || !Number.isFinite(elapsedSec)) return null
+  const step = Math.floor((Math.max(elapsedSec, 0) * bpm * stepsPerBeat) / 60)
+  return step % stepCount
 }

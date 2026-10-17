@@ -107,6 +107,7 @@ const ARTIST_ENTRIES: ReadonlyArray<readonly [string, OriginCountry, Subgenre]> 
   ['Def Leppard', 'United Kingdom', 'Hard Rock'],
   ["Guns N' Roses", 'United States', 'Hard Rock'],
   ['Halestorm', 'United States', 'Hard Rock'],
+  ['HARDY', 'United States', 'Hard Rock'],
   ['Kid Rock', 'United States', 'Hard Rock'],
   ['KISS', 'United States', 'Hard Rock'],
   ['Scorpions', 'Germany', 'Hard Rock'],

@@ -1,7 +1,18 @@
-import { Link } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import FilterBar from '../components/FilterBar'
 import StatusMessage from '../components/StatusMessage'
-import type { FetchStatus, Track } from '../types/track'
-import { formatDuration, getTotalDuration } from '../utils/trackUtils'
+import TrackCard from '../components/TrackCard'
+import type { FetchStatus, Track, TrackFilters } from '../types/track'
+import {
+  DEFAULT_FILTERS,
+  filterTracks,
+  getTotalDuration,
+  getUniqueArtists,
+  getUniqueCountries,
+  getUniqueSubgenres,
+  hasActiveFilters,
+  sortTracks,
+} from '../utils/trackUtils'
 
 export interface CatalogPageProps {
   tracks: Track[]
@@ -11,15 +22,31 @@ export interface CatalogPageProps {
 }
 
 function CatalogPage({ tracks, status, error, onRetry }: CatalogPageProps) {
+  const [filters, setFilters] = useState<TrackFilters>(DEFAULT_FILTERS)
+
+  // Everything below is derived from tracks + filters — never stored in state.
+  const visibleTracks = useMemo(
+    () => sortTracks(filterTracks(tracks, filters), filters.sort),
+    [tracks, filters],
+  )
+  const options = useMemo(
+    () => ({
+      countries: getUniqueCountries(tracks),
+      subgenres: getUniqueSubgenres(tracks),
+      artists: getUniqueArtists(tracks),
+    }),
+    [tracks],
+  )
+
+  const resetFilters = () => setFilters(DEFAULT_FILTERS)
+
   return (
     <section>
       <header className="page-header">
         <h1>Vault Catalog</h1>
-        {status === 'success' && tracks.length > 0 && (
-          <p className="page-summary">
-            {tracks.length} tracks · {formatDuration(getTotalDuration(tracks))} total
-          </p>
-        )}
+        <p className="page-summary">
+          Rock, metal and metalcore from the iTunes catalog — tagged by band origin and style.
+        </p>
       </header>
 
       {status === 'loading' && (
@@ -45,30 +72,38 @@ function CatalogPage({ tracks, status, error, onRetry }: CatalogPageProps) {
       )}
 
       {status === 'success' && tracks.length > 0 && (
-        <ul className="track-list">
-          {tracks.map((track) => (
-            <li key={track.id}>
-              <Link to={`/tracks/${track.id}`} className="track-row">
-                <img
-                  className="track-art"
-                  src={track.artworkUrl}
-                  alt={`${track.album} album artwork`}
-                  width={100}
-                  height={100}
-                  loading="lazy"
-                />
-                <div className="track-info">
-                  <h2 className="track-title">{track.title}</h2>
-                  <p className="track-artist">{track.artist}</p>
-                  <p className="track-meta">
-                    {track.album} · {track.genre}
-                  </p>
-                </div>
-                <span className="track-duration">{formatDuration(track.durationMs)}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <>
+          <FilterBar
+            filters={filters}
+            countries={options.countries}
+            subgenres={options.subgenres}
+            artists={options.artists}
+            resultCount={visibleTracks.length}
+            totalCount={tracks.length}
+            resultDurationMs={getTotalDuration(visibleTracks)}
+            canReset={hasActiveFilters(filters) || filters.sort !== DEFAULT_FILTERS.sort}
+            onChange={setFilters}
+            onReset={resetFilters}
+          />
+
+          {visibleTracks.length === 0 ? (
+            <StatusMessage
+              variant="empty"
+              title="No tracks match your filters"
+              message="Try a different search, mood or filter combination."
+              onRetry={resetFilters}
+              retryLabel="Reset filters"
+            />
+          ) : (
+            <ul className="track-grid">
+              {visibleTracks.map((track) => (
+                <li key={track.id}>
+                  <TrackCard track={track} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </section>
   )

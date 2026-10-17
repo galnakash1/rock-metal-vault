@@ -132,3 +132,64 @@ Verified live iTunes API fetch in the browser (129 rock/metal tracks loaded clea
 > Stop after completing Task 4 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Ran npm test and npm run test:ui in the browser and verified all 37 unit tests pass across duration formatting, country/style enrichment, mood filtering, deduplication, and guitar riff tab generation. Marked Task 4 as done in tasks.md.
+**11:30 · claude**
+
+> <pasted_content id="5dbb">
+> Task 4 is verified and committed, and all 37 tests look great in Vitest UI. Two small data touches before/during Task 5:
+> - Please add `"HARDY"` (`"United States"`, `"🇺🇸"`, `"Hard Rock"`) to `artistMetadata.ts` so 100% of our live catalog has a known country flag.
+> - In `riffTabs.ts`, keep the honest style-based practice riffs as the default, and also add song-specific signature opening riff tabs for several iconic artists/tracks in our catalog (e.g., AC/DC "Back In Black", Black Sabbath "Paranoid" / "Iron Man", Metallica, Iron Maiden, Bad Omens, Architects, Bring Me The Horizon) labeled as signature riff tabs when matched.
+> 
+> Now please proceed with **Task 5** from `tasks.md` ONLY:
+> 1. Build `src/components/TrackCard.tsx`:
+>    - Displays artwork, track title, artist name, origin country flag + country name, style/subgenre badge, release year, and formatted `mm:ss` duration, linking to `/tracks/${track.id}` (and leaving a clean slot/prop for the Setlist toggle button in Task 6).
+> 2. Build `src/components/FilterBar.tsx` and wire it into `CatalogPage.tsx`:
+>    - Live text search input (matching title, artist, album, style, or country) with a clear/reset filters button.
+>    - Interactive **Sonic Mood Capsules** (`All`, `Atmospheric & Epic`, `Modern Breakdown`, `70s–80s Legends`, `Quick Riff Blitz`).
+>    - Dropdown filters for **Origin Country** (with flags), **Style/Subgenre**, and **Artist**, plus a **Sort** selector (e.g., Title, Release Year, Duration, Artist).
+>    - Display a live summary line (e.g., showing X of Y tracks and total duration of filtered tracks) and render `StatusMessage` when no tracks match the active filters.
+> 3. Build `src/components/AudioPreviewPlayer.tsx` (our **Amp Console Player**) and the **6-String Guitar Riff Tab Panel** on `TrackDetailPage.tsx`:
+>    - Use HTML5 `<audio crossOrigin="anonymous">` connected to the Web Audio API (`AudioContext`, `BiquadFilterNode` chain for low/mid/high, and `AnalyserNode`) with graceful fallback if Web Audio is blocked/unavailable.
+>    - Provide selectable Rock/Metal EQ presets (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`) that audibly shape the frequency response in real time.
+>    - Render a live frequency bar visualizer (`<canvas>` or animated bars driven by `AnalyserNode`) while the 30-second riff plays, plus play/pause, progress scrubber, and time display.
+>    - Below or beside the Amp Console on `TrackDetailPage.tsx`, render the interactive **6-String Guitar Riff Tab** viewer showing the tuning badge, BPM, difficulty, and aligned 6-string tab (`e B G D A E`) with a visual playhead highlight synced to playback.
+> 4. Ensure zero `any` types and verify that `npm test`, `npm run build`, and `npm run lint` all pass with zero errors.
+> 
+> Stop after completing Task 5 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+
+**11:42 · claude**
+
+> <pasted_content id="5dbb">
+> Task 5 is done. All 50 tests pass, the build and lint are clean, there's no any in the code, and the console stayed clean throughout the browser checks.
+> 
+> What changed
+> 
+> Catalog: CatalogPage.tsx shows a grid of TrackCards controlled by FilterBar: live search, a Reset filters button, the five mood pills, country (with flags), style, artist and sort dropdowns, and a "Showing X of Y · total time" line. When nothing matches it shows a "No tracks match your filters" message with a Reset button.
+> Detail page: it now has the Amp Console, which plays the preview through a three-band EQ with the four presets and draws a live frequency visualizer. It also has play/pause, a seek bar and a time display, and falls back to plain audio if the browser blocks Web Audio. Next to it, the Riff Tab panel shows tuning, BPM, difficulty and a six-string tab whose highlighted column follows the music.
+> Data: HARDY is in the artist map, so every card in the live catalog now has a country flag. Simplified signature riffs are added for a handful of iconic songs; every other track keeps its labelled practice riff.
+> How I checked it
+> 
+> Catalog in headless Chrome:
+> Searching "australia" showed 16 tracks.
+> The 70s–80s Legends pill showed 23 tracks, and clicking it again went back to All.
+> UK plus Metalcore showed 3 tracks, sorted longest first.
+> A search with no matches showed the empty message, and Reset brought back all 113.
+> Detail page in headless Chrome:
+> Back In Black played with the signature tab.
+> The audio engine came up and the visualizer drew bars.
+> Switching to Bass Drop mid-play kept the audio running without restarting.
+> Seeking worked.
+> There was no horizontal scrolling at 375px wide.
+> Worth knowing
+> 
+> Signature riff coverage: only riffs I can tab reliably are included: Iron Man, Back In Black (the opening chords), Smoke on the Water, Smells Like Teen Spirit, Sweet Child O' Mine, Crazy Train and the Nothing Else Matters intro. I left out Paranoid, The Trooper and the Bad Omens, Architects and Bring Me The Horizon songs because I couldn't tab them accurately. Those keep their labelled practice riffs. If you have trusted tabs for them, they're one entry each in SIGNATURE_RIFFS.
+> Listen to the EQ yourself: a headless browser can confirm the presets switch and the audio keeps flowing, but not what they sound like. Give them a quick listen on a real device.
+> The playhead is approximate: it steps evenly at the riff's rough tempo and doesn't follow the song's real rhythm.
+> Grey card artwork in screenshots: it was just lazy loading at capture time. The 300px images load fine.
+> Small additions:
+> StatusMessage got an optional button label, used for "Reset filters".
+> The catalog sorts by artist by default.
+> I updated the PRD, architecture doc and tasks.md to match.
+> I left the Task 5 checkbox for you to tick. I've stopped here, and I'll start Task 6 when you give the go-ahead.
+> </pasted_content id="5dbb">
+Tested FilterBar (search, mood pills, country/style/artist filters) and listened to the Amp Console EQ presets with the synced 6-string guitar riff tab on TrackDetailPage. Marked Task 5 as done in tasks.md.

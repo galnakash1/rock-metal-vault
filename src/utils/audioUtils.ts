@@ -1,0 +1,81 @@
+import type { EqPreset, EqPresetId } from '../types/audio'
+
+// ---------- EQ ----------
+
+/** Filter settings for the three Amp Console bands (BiquadFilterNode type, frequency in Hz). */
+export const EQ_BANDS = {
+  bass: { type: 'lowshelf', frequency: 120 },
+  mid: { type: 'peaking', frequency: 900, q: 1 },
+  treble: { type: 'highshelf', frequency: 4500 },
+} as const
+
+/** Display order of the preset buttons. */
+export const EQ_PRESET_IDS: readonly EqPresetId[] = [
+  'flat',
+  'metalcore-scoop',
+  'classic-tube-amp',
+  'bass-drop',
+]
+
+export const EQ_PRESETS: Record<EqPresetId, EqPreset> = {
+  flat: {
+    id: 'flat',
+    label: 'Flat',
+    description: 'The preview exactly as released',
+    bassDb: 0,
+    midDb: 0,
+    trebleDb: 0,
+  },
+  'metalcore-scoop': {
+    id: 'metalcore-scoop',
+    label: 'Metalcore Scoop',
+    description: 'Boosted lows and highs with scooped mids',
+    bassDb: 5,
+    midDb: -6,
+    trebleDb: 4,
+  },
+  'classic-tube-amp': {
+    id: 'classic-tube-amp',
+    label: 'Classic Tube Amp',
+    description: 'Warm mid push with softened highs',
+    bassDb: 2,
+    midDb: 4,
+    trebleDb: -2,
+  },
+  'bass-drop': {
+    id: 'bass-drop',
+    label: 'Bass Drop',
+    description: 'Heavy low-end boost',
+    bassDb: 9,
+    midDb: -2,
+    trebleDb: -1,
+  },
+}
+
+// ---------- Visualizer ----------
+
+/**
+ * Reduces analyser FFT data (0–255 per bin) to `bars` averaged levels between 0 and 1.
+ * Only the lower `usableFraction` of bins is used: the top of a 30s preview's spectrum
+ * is nearly silent, so including it would leave the right-hand bars permanently flat.
+ */
+export function bucketFrequencies(
+  data: ArrayLike<number>,
+  bars: number,
+  usableFraction = 0.75,
+): number[] {
+  if (bars <= 0) return []
+  const usable = Math.floor(data.length * Math.min(Math.max(usableFraction, 0), 1))
+
+  return Array.from({ length: bars }, (_, bar) => {
+    const start = Math.floor((bar * usable) / bars)
+    const end = Math.max(start + 1, Math.floor(((bar + 1) * usable) / bars))
+    let sum = 0
+    let count = 0
+    for (let index = start; index < end && index < usable; index += 1) {
+      sum += data[index] ?? 0
+      count += 1
+    }
+    return count === 0 ? 0 : sum / count / 255
+  })
+}

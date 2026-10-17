@@ -34,7 +34,7 @@ Supporting the features above are three **music-data enrichments**, which add da
 | --- | --- | --- |
 | **Band Origin & Style** | Cards, `/tracks/:id`, filters | Each track gets the band's origin country + flag and a style/subgenre (e.g. 🇬🇧 Metalcore) from a curated artist map |
 | **Country & Style filtering** | `/` | Filter by Origin Country and Style/Subgenre; search also matches style and country |
-| **6-String Guitar Riff Tab** | `/tracks/:id` | A playable practice riff for the track's style: tuning, BPM, difficulty, and a 6-line tab |
+| **6-String Guitar Riff Tab** | `/tracks/:id` | A simplified **signature riff** for a few iconic songs, otherwise a practice riff for the track's style: tuning, BPM, difficulty, a 6-line tab, and a playhead synced to the preview |
 
 ## 3. Tech Stack & Constraints
 
@@ -89,7 +89,9 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 - Reads `id` from the URL with `useParams`.
 - Shows **high-resolution album artwork** (upgraded to 600×600), track title, artist, album, **release year**, **duration formatted as `mm:ss`**, genre, **style/subgenre**, **band origin** (flag + country), and an explicit badge if applicable.
-- **Guitar Riff Tab panel**, next to the Amp Console: a monospaced 6-string tab (`e B G D A E` lines) with **tuning** (e.g. "Drop C (C G C F A D)"), suggested **BPM**, and **difficulty**. It's labelled as a *practice riff in the track's style* (e.g. "Metalcore practice riff"), not a transcription of the recording.
+- **Guitar Riff Tab panel**, next to the Amp Console: a monospaced 6-string tab (`e B G D A E` lines) with **tuning** (e.g. "Drop C (C G C F A D)"), approximate **BPM**, and **difficulty**. A highlighted **playhead** column follows the preview at the riff's tempo.
+  - **Signature riff tab:** for a curated set of iconic songs (Iron Man, Back In Black, Smoke on the Water, Smells Like Teen Spirit, Sweet Child O' Mine, Crazy Train, Nothing Else Matters), a simplified tab of the song's own opening riff.
+  - **Practice riff tab:** for every other track, a riff in the track's style (e.g. "Metalcore practice riff"), clearly labelled as not a transcription of the recording.
 - **Amp Console Player** (signature feature 2): an HTML5 `<audio>` element for the 30-second `previewUrl`, routed through the Web Audio API:
   - Custom play/pause and progress controls, styled like an amp.
   - A **real-time frequency bar visualizer** (`<canvas>` driven by an `AnalyserNode`).
@@ -163,7 +165,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 - Syncing the setlist across devices (`localStorage` only).
 - Third-party UI, audio, or state-management libraries.
 - Features beyond the four signature features and three enrichments (e.g. stats dashboards, random-track rollers, playlists export).
-- Transcribed tabs of the actual recordings (the riff tab is a style-based practice riff).
+- Full or exhaustive transcriptions: only a few short, simplified signature opening riffs are tabbed; everything else uses a style-based practice riff.
 
 ## 9. Further Reading
 

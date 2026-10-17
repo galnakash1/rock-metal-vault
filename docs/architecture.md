@@ -99,15 +99,15 @@ src/
 | Component | Responsibility | Key props |
 | --- | --- | --- |
 | `Navbar` | Brand logo + `NavLink`s (Vault Catalog / Festival Poster / Riff Arena); highlights the active route; shows the setlist count badge | `setlistCount: number` |
-| `TrackCard` | Artwork, title, artist, album, duration, explicit badge; links to `/tracks/:id`; contains the setlist toggle | `track`, `inSetlist`, `onToggleSetlist` |
-| `FilterBar` | Controlled search input, Origin Country `<select>` (flag + name), Style/Subgenre `<select>`, Artist `<select>`, sort `<select>`, results count | `filters`, `countries`, `subgenres`, `artists`, `onChange`, `resultCount`, `totalCount` |
-| `MoodCapsules` | Row of toggle pills (`aria-pressed`) built from `MOOD_CAPSULES`; clicking the active pill clears it | `activeMood: MoodId \| null`, `onChange` |
-| `AudioPreviewPlayer` | **Amp Console:** `<audio crossOrigin="anonymous">` + custom play/pause/progress, `<canvas>` frequency bars, and EQ preset buttons; uses `useAmpConsole` | `src`, `title` |
-| `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `action?` |
+| `TrackCard` | 300px artwork, title, artist, origin flag + country, style badge, release year, duration, explicit badge; links to `/tracks/:id`. An `actions` slot outside the link holds the Task 6 setlist toggle | `track`, `actions?: ReactNode` |
+| `FilterBar` | Controlled search input + Reset filters button, `MoodCapsules`, Origin Country `<select>` (flag + name), Style `<select>`, Artist `<select>`, Sort `<select>`, and a live "Showing X of Y tracks · total" summary | `filters`, `countries`, `subgenres`, `artists`, `resultCount`, `totalCount`, `resultDurationMs`, `canReset`, `onChange`, `onReset` |
+| `MoodCapsules` | "All" + one toggle pill (`aria-pressed`) per `MOOD_CAPSULES` entry; clicking the active pill returns to All. Rendered inside `FilterBar` | `activeMood: MoodId \| null`, `onChange` |
+| `AudioPreviewPlayer` | **Amp Console:** `<audio crossOrigin="anonymous">` + play/pause, scrubber and time display, `<canvas>` frequency bars, EQ preset buttons, and a plain-audio fallback note; uses `useAmpConsole` | `src`, `title`, `onProgress?(seconds, isPlaying)` |
+| `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `retryLabel?`, `action?` |
 | `SetlistButton` | Add / Remove toggle with an `aria-pressed` state; stops click propagation when used inside a card link | `inSetlist`, `onToggle` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large), Underbill (small), runtime, and counts; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
 | `BlindTestGame` | Round flow (start → listen → guess → reveal → next), blurred artwork, 4 option buttons, score/streak | `tracks` |
-| `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled as a style-based practice riff | `tab: GuitarRiffTab` |
+| `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled "Signature riff tab" or "Practice riff tab"; highlights the playhead column | `tab: GuitarRiffTab`, `subgenre`, `activeStep: number \| null` |
 | `TrackSelect` | Labelled `<select>` listing catalog tracks (used twice in the Head-to-Head) | `label`, `tracks`, `value`, `onChange` |
 
 The first five required components are `Navbar`, `TrackCard`, `FilterBar`, `AudioPreviewPlayer`, and `StatusMessage`. The rest either carry a signature feature or remove duplicated markup.
@@ -262,12 +262,22 @@ export type RiffFamily =
   | 'progressive' | 'hard-rock' | 'classic-rock' | 'punk' | 'grunge'
 export type RiffStep = Partial<Record<GuitarString, number>>  // one tab column (fret per string)
 
+export interface TabColumn {
+  width: number
+  cells: Record<GuitarString, string>   // each string's cell padded to the column width
+}
+
+export type RiffTabKind = 'signature' | 'practice'
+
 export interface GuitarRiffTab {
-  title: string                  // "Metalcore practice riff"
+  kind: RiffTabKind              // curated song riff vs. style-based practice riff
+  title: string                  // "Back In Black — signature riff" / "Metalcore practice riff"
   family: RiffFamily
   tuning: string                 // "Drop C (C G C F A D)"
-  bpm: number                    // suggested practice tempo
+  bpm: number                    // approximate tempo
+  stepsPerBeat: number           // columns per beat (2 = eighths), drives the playhead
   difficulty: RiffDifficulty
+  columns: TabColumn[]           // one per step, for the playhead highlight
   lines: Record<GuitarString, string>   // six equal-length lines, e.g. E: "|-0-0-3-|"
 }
 ```
@@ -301,6 +311,8 @@ export interface TrackCardProps {
 
 export interface RiffTabPanelProps {
   tab: GuitarRiffTab
+  subgenre: string
+  activeStep: number | null      // playhead column from getRiffPlayheadIndex
 }
 
 export interface MoodCapsulesProps {
@@ -311,6 +323,7 @@ export interface MoodCapsulesProps {
 export interface AudioPreviewPlayerProps {
   src: string
   title: string
+  onProgress?: (seconds: number, isPlaying: boolean) => void   // drives the riff playhead
 }
 
 export interface FestivalPosterProps {
@@ -343,8 +356,9 @@ There are no external state libraries — just React state, custom hooks, and pr
 | `filters: TrackFilters` (search, country, subgenre, artist, mood, sort) | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `FilterBar` and `MoodCapsules` (`filters.mood`); `onChange` callbacks go back up |
 | Visible tracks | Derived in `CatalogPage`: `useMemo(() => sortTracks(filterTracks(tracks, filters), filters.sort))` | Derived data — never stored in state | Props → `TrackCard`s |
 | Country / style / artist options | Derived with `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | Derived | Props → `FilterBar` |
-| Riff tab | Derived in `TrackDetailPage`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `RiffTabPanel` |
-| Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` | Single source of truth is the URL | Local render |
+| Riff tab | Derived in `TrackDetailView`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `RiffTabPanel` |
+| Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` | Single source of truth is the URL | Rendered by `TrackDetailView` with `key={track.id}`, so playback state and the audio graph reset per track |
+| Playback `{ seconds, isPlaying }` | `TrackDetailView` (`useState`), updated by `AudioPreviewPlayer`'s `onProgress` every animation frame | Shared by the Amp Console and the riff playhead | `getRiffPlayheadIndex` → `RiffTabPanel` `activeStep` |
 | EQ preset, play state, progress | `AudioPreviewPlayer` (`useState`) | Local to one player | `useAmpConsole` |
 | Audio graph nodes, animation frame id | `useAmpConsole` (`useRef`) | Mutable, non-render data | — |
 | Poster theme | `SetlistPage` (`useState`) | Page-local | Props → `FestivalPoster` |
@@ -394,6 +408,8 @@ There are no external state libraries — just React state, custom hooks, and pr
   → AudioContext.destination
 ```
 
+- **Hook API:** `useAmpConsole(audioRef, preset)` returns `{ engine: 'idle' | 'active' | 'unavailable', connect(), readFrequencies() }`.
+- **Graceful fallback:** if `AudioContext` is missing or graph creation throws, `engine` becomes `'unavailable'`. The plain `<audio>` element keeps playing, the EQ buttons are disabled, and a note explains why.
 - **Lazy start:** the `AudioContext` and nodes are created on the first Play click (a user gesture, required by browser autoplay policies) and kept in refs. A media element can only be connected to one `MediaElementAudioSourceNode`, so the graph is built exactly once per element.
 - **Live EQ:** switching presets calls `gain.setTargetAtTime(db, ctx.currentTime, 0.05)` on the three filters. The sound changes smoothly, and playback is never restarted.
 - **Visualizer:** while playing, a `requestAnimationFrame` loop reads `analyser.getByteFrequencyData()`, reduces it to N bars with `bucketFrequencies()`, and draws on a `<canvas>`. The loop is cancelled on pause, on end, and on unmount.
@@ -425,10 +441,12 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ### 6-String Guitar Riff Tab (`riffTabs.ts`)
 
-- These are **style-based practice riffs, not transcriptions** of the recordings. The UI labels them that way (e.g. "Metalcore practice riff").
+- **Signature riffs first:** `SIGNATURE_RIFFS` holds simplified tabs of a few iconic opening riffs (Iron Man, Back In Black, Smoke on the Water, Smells Like Teen Spirit, Sweet Child O' Mine, Crazy Train, Nothing Else Matters). `findSignatureRiff` matches on `normalizeArtistKey(artist)` + `normalizeTitleKey(title)`, so "(2012 Remaster)" / "[Live]" / " - Remastered" variants still match. Only riffs that can be tabbed reliably are listed.
+- **Practice riffs otherwise:** every other track gets a **style-based practice riff, not a transcription**. The UI labels it that way (e.g. "Metalcore practice riff").
 - `SUBGENRE_RIFF_FAMILIES: Record<Subgenre, RiffFamily>` maps every style to one of 10 families. `RIFF_PROFILES: Record<RiffFamily, …>` gives each family a tuning (Drop C, Drop B, Drop D, E Standard), a BPM range, a difficulty, and two riff templates.
 - Templates are lists of `RiffStep`s built from helpers: `chug(fret)` (low-string chug), `dropFive` (one-finger drop power chord), `powerE` / `powerA` (standard power chords), and `note`.
-- `renderTab(steps)` turns steps into six aligned lines. Each column is as wide as its widest fret, so `10` never breaks alignment.
+- `getTabColumns(steps)` pads each step into a column as wide as its widest fret (so `10` never breaks alignment); `renderTab(steps)` joins the columns into six `|-…-|` lines.
+- **Playhead:** `getRiffPlayheadIndex(seconds, bpm, columns, stepsPerBeat)` = `floor(seconds × bpm × stepsPerBeat / 60) mod columns`, so the highlight loops through the riff in time with the preview.
 - `getTrackRiffTab(track)` is deterministic: the style picks the profile, and `track.id` picks the template and a BPM within the range.
 
 ## 6. Utility Functions
@@ -453,6 +471,7 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use `localeCompare` | ✅ Task 4 |
 | `getTotalDuration` | `(tracks: Track[]) => number` | Sum of `durationMs` (0 for an empty list) | ✅ Task 4 |
 | `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | `(tracks: Track[]) => OriginCountry[] / Subgenre[] / string[]` | Sorted, de-duplicated option lists for `FilterBar` ("Unknown" country last) | ✅ Task 4 |
+| `DEFAULT_FILTERS` / `hasActiveFilters` | `TrackFilters` / `(filters) => boolean` | Starting/reset filter state (sorted by artist); whether anything narrows the list (sort and blank search don't count) | ✅ Task 5 |
 | `MOOD_CAPSULES` / `matchesMood` | `MoodCapsule[]` / `(track, mood: MoodId) => boolean` | Sonic Mood Capsule definitions and rules (see §5) | ✅ Task 4 |
 | `parseStoredSetlist` | `(raw: string \| null) => Track[]` | Safe `JSON.parse`; `[]` for null, invalid JSON, or non-arrays | Task 6 |
 | `toggleTrackInList` | `(list: Track[], track: Track) => Track[]` | Adds the track if absent, removes it if present (immutable) | Task 6 |
@@ -480,14 +499,18 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `GUITAR_STRINGS` | `readonly GuitarString[]` | `['e', 'B', 'G', 'D', 'A', 'E']` — tab line order | ✅ Task 4 |
 | `SUBGENRE_RIFF_FAMILIES` / `RIFF_PROFILES` | `Record<Subgenre, RiffFamily>` / `Record<RiffFamily, RiffProfile>` | Style → family → tuning, BPM range, difficulty, templates | ✅ Task 4 |
 | `renderTab` | `(steps: readonly RiffStep[]) => Record<GuitarString, string>` | Six aligned `\|-…-\|` lines; multi-digit frets widen the whole column | ✅ Task 4 |
-| `getTrackRiffTab` | `(track: Pick<Track, 'id' \| 'subgenre'>) => GuitarRiffTab` | Deterministic practice riff for any track | ✅ Task 4 |
+| `getTabColumns` | `(steps: readonly RiffStep[]) => TabColumn[]` | Padded per-step columns (used by the playhead and `renderTab`) | ✅ Task 5 |
+| `SIGNATURE_RIFFS` / `normalizeTitleKey` / `findSignatureRiff` | — / `(title) => string` / `(track) => SignatureRiff \| null` | Curated signature riffs and title-variant-tolerant matching | ✅ Task 5 |
+| `getTrackRiffTab` | `(track: Pick<Track, 'id' \| 'subgenre' \| 'artist' \| 'title'>) => GuitarRiffTab` | Signature riff when listed, otherwise a deterministic practice riff | ✅ Task 4–5 |
+| `getRiffPlayheadIndex` | `(seconds, bpm, stepCount, stepsPerBeat?) => number \| null` | Looping playhead column; `null` when nothing can be highlighted | ✅ Task 5 |
 
 ### `src/utils/audioUtils.ts`
 
 | Function / constant | Signature | Behavior | Test |
 | --- | --- | --- | --- |
-| `EQ_PRESETS` | `Record<EqPresetId, EqPreset>` | The four Amp Console presets | Task 5 |
-| `bucketFrequencies` | `(data: Uint8Array, bars: number) => number[]` | Averages FFT bins into `bars` values normalized to 0–1 | Task 5 |
+| `EQ_BANDS` | `{ bass, mid, treble }` | Filter type + frequency (+ Q) per band | — |
+| `EQ_PRESETS` / `EQ_PRESET_IDS` | `Record<EqPresetId, EqPreset>` / `readonly EqPresetId[]` | The four Amp Console presets and their button order | ✅ Task 5 |
+| `bucketFrequencies` | `(data: ArrayLike<number>, bars: number, usableFraction = 0.75) => number[]` | Averages the lower 75% of FFT bins into `bars` values normalized to 0–1 | ✅ Task 5 |
 
 **Test fixtures:** `src/data/mockTracks.json` (10 real iTunes records from US, UK, and Australian bands) uses the raw iTunes response shape, and tests load it through `parseSearchResults`, the same validation the live API uses. It feeds the static list in Tasks 1–2 and is reused as the test fixture after the switch to the real API in Task 3. The tests never hit the network.
 

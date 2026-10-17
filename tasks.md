@@ -54,7 +54,7 @@
 
 ## Task 4 — Music-data enrichments, Mood Capsule logic, Vitest, and unit tests
 
-- [ ] **Goal:** Enrich the track model, finish the pure logic for moods, filters and riff tabs, and prove it all works with automated tests.
+- [x] **Goal:** Enrich the track model, finish the pure logic for moods, filters and riff tabs, and prove it all works with automated tests.
 - **Files:** `package.json`, `src/types/track.ts`, `src/types/riff.ts`, `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/api/itunes.ts`, `src/data/mockTracks.json`, `src/utils/trackUtils.test.ts`
 - **Steps:**
   1. **Band origin & style:** add the `OriginCountry`, `Subgenre`, and `ArtistMetadata` types, and add `originCountry`, `originFlag`, and `subgenre` to `Track`. Create `artistMetadata.ts`, a curated artist map with case/qualifier/collaboration-tolerant lookup and a deterministic "Unknown" + genre-derived fallback. `normalizeTrack` enriches every track.
@@ -77,17 +77,18 @@
 
 ## Task 5 — Catalog components, Mood Capsules UI, Amp Console, and Riff Tab panel
 
-- [ ] **Goal:** Make the catalog interactive, and give the detail page its signature player and riff tab.
+- [x] **Goal:** Make the catalog interactive, and give the detail page its signature player and riff tab.
 - **Files:** `src/components/TrackCard.tsx`, `src/components/FilterBar.tsx`, `src/components/MoodCapsules.tsx`, `src/components/AudioPreviewPlayer.tsx`, `src/components/RiffTabPanel.tsx`, `src/hooks/useAmpConsole.ts`, `src/types/audio.ts`, `src/utils/audioUtils.ts` (+ tests), `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`
 - **Steps:**
-  1. Build `TrackCard`: artwork, title, artist, album, origin flag, style, duration, and an explicit badge. It links to the detail page.
-  2. Build `FilterBar`: a controlled search input, Origin Country select (flag + name), Style/Subgenre select, Artist select, sort select, and a results count. Every control has a `<label>`.
+  0. Data touches: add HARDY to `artistMetadata.ts`; add simplified **signature riff tabs** for iconic songs to `riffTabs.ts` (practice riffs stay the default), plus `getTabColumns` and `getRiffPlayheadIndex` with tests.
+  1. Build `TrackCard`: artwork, title, artist, origin flag + country, style badge, release year, duration, and an explicit badge. It links to the detail page and has an `actions` slot for the Task 6 setlist toggle.
+  2. Build `FilterBar`: a controlled search input with a Reset filters button, the mood pills, Origin Country select (flag + name), Style/Subgenre select, Artist select, sort select, and a live summary ("Showing X of Y tracks · total duration"). Every control has a `<label>`.
   3. Build `MoodCapsules` (signature ①): 4 toggle pills with `aria-pressed`; clicking the active pill clears it.
   4. In `CatalogPage`, keep `filters: TrackFilters` (including `mood`) in `useState`, and derive the visible list with `useMemo(sortTracks(filterTracks(tracks, filters), filters.sort))`. Show an `empty` `StatusMessage` when nothing matches.
   5. Add `EQ_PRESETS` and `bucketFrequencies` to `audioUtils.ts`, with tests.
   6. Write the `useAmpConsole` hook. It creates the `AudioContext` lazily on the first play, then wires the source → lowshelf/peaking/highshelf filters → analyser → destination. Preset changes use `setTargetAtTime`, and the hook cleans up the animation frame and context on unmount.
   7. Build `AudioPreviewPlayer` as the Amp Console (signature ②): `<audio crossOrigin="anonymous">`, play/pause and progress controls, a `<canvas>` frequency-bar visualizer, and 4 EQ preset buttons (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`). It replaces the placeholder player on `TrackDetailPage`.
-  8. Build `RiffTabPanel`: a monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty, labelled as a practice riff in the track's style. Show it on `TrackDetailPage` next to the Amp Console, along with the origin flag/country and style in the track facts.
+  8. Build `RiffTabPanel`: a monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty, labelled as a signature or practice riff, with a playhead column synced to the Amp Console's playback. Show it on `TrackDetailPage` next to the Amp Console, along with the origin flag/country and style in the track facts.
 - **Done when:** typing in the search box filters the cards live (including by style or country); the country, style, and artist filters, the mood pills, and every sort option work together; the results count updates; "no matches" shows the empty state; the detail page plays the preview with moving frequency bars; switching EQ presets mid-play changes the sound without restarting it; the riff tab panel shows a correctly aligned tab with tuning, BPM, and difficulty; and `npm test` passes.
 
 ---

@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest'
 import mockData from '../data/mockTracks.json'
 import type { ITunesTrackRaw, Subgenre, Track, TrackFilters } from '../types/track'
 import { getArtistMetadata } from './artistMetadata'
-import { GUITAR_STRINGS, RIFF_PROFILES, SUBGENRE_RIFF_FAMILIES, getTrackRiffTab, renderTab } from './riffTabs'
 import {
+  GUITAR_STRINGS,
+  RIFF_PROFILES,
+  SIGNATURE_RIFFS,
+  SUBGENRE_RIFF_FAMILIES,
+  getRiffPlayheadIndex,
+  getTabColumns,
+  getTrackRiffTab,
+  normalizeTitleKey,
+  renderTab,
+} from './riffTabs'
+import {
+  DEFAULT_FILTERS,
   MOOD_CAPSULES,
   dedupeTracks,
   filterTracks,
@@ -12,6 +23,7 @@ import {
   getTotalDuration,
   getUniqueCountries,
   getUniqueSubgenres,
+  hasActiveFilters,
   isVaultTrack,
   matchesMood,
   normalizeTrack,
@@ -371,6 +383,23 @@ describe('filter option helpers', () => {
   })
 })
 
+describe('DEFAULT_FILTERS & hasActiveFilters', () => {
+  it('starts with nothing filtered, and ignores sort and whitespace-only search', () => {
+    expect(filterTracks(tracks, DEFAULT_FILTERS)).toHaveLength(tracks.length)
+    expect(hasActiveFilters(DEFAULT_FILTERS)).toBe(false)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, sort: 'title-desc' })).toBe(false)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, search: '   ' })).toBe(false)
+  })
+
+  it('reports any narrowing filter as active', () => {
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, search: 'riff' })).toBe(true)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, country: 'Sweden' })).toBe(true)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, subgenre: 'Grunge' })).toBe(true)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, artist: 'Metallica' })).toBe(true)
+    expect(hasActiveFilters({ ...DEFAULT_FILTERS, mood: 'legends-70s-80s' })).toBe(true)
+  })
+})
+
 // ---------- Sorting ----------
 
 describe('sortTracks', () => {
@@ -406,9 +435,17 @@ describe('getTrackRiffTab', () => {
     for (const line of Object.values(lines)) expect(line).toMatch(/^\|-[-\d]+\|$/)
   }
 
+  const practiceInput = (id: number, subgenre: Subgenre) => ({
+    id,
+    subgenre,
+    artist: 'Garage Band Nobody Knows',
+    title: 'Untitled Riff',
+  })
+
   it('resolves tuning, tempo and difficulty from the track style', () => {
     const metalcore = getTrackRiffTab(byTitle('Just Pretend'))
     expect(metalcore).toMatchObject({
+      kind: 'practice',
       title: 'Metalcore practice riff',
       family: 'metalcore',
       tuning: 'Drop C (C G C F A D)',
@@ -433,19 +470,20 @@ describe('getTrackRiffTab', () => {
   it('is deterministic per track and varies the riff between tracks', () => {
     const track = byTitle('Doomsday')
     expect(getTrackRiffTab(track)).toEqual(getTrackRiffTab(track))
-    const even = getTrackRiffTab({ id: 2, subgenre: 'Metalcore' })
-    const odd = getTrackRiffTab({ id: 3, subgenre: 'Metalcore' })
+    const even = getTrackRiffTab(practiceInput(2, 'Metalcore'))
+    const odd = getTrackRiffTab(practiceInput(3, 'Metalcore'))
     expect(even.lines).not.toEqual(odd.lines)
   })
 
   it('produces a well-formed tab for every style and template', () => {
     const subgenres = Object.keys(SUBGENRE_RIFF_FAMILIES) as Subgenre[]
     for (const subgenre of subgenres) {
-      for (const id of [0, 1, 2, 3]) expectWellFormed(getTrackRiffTab({ id, subgenre }).lines)
+      for (const id of [0, 1, 2, 3]) expectWellFormed(getTrackRiffTab(practiceInput(id, subgenre)).lines)
     }
     for (const profile of Object.values(RIFF_PROFILES)) {
       for (const template of profile.templates) expectWellFormed(renderTab(template))
     }
+    for (const riff of SIGNATURE_RIFFS) expectWellFormed(renderTab(riff.steps))
   })
 
   it('keeps columns aligned when frets have two digits', () => {
@@ -454,5 +492,73 @@ describe('getTrackRiffTab', () => {
       A: '|----2-|',
       e: '|------|',
     })
+  })
+})
+
+describe('signature riff tabs', () => {
+  it('uses the curated signature riff when the artist and song match', () => {
+    const backInBlack = getTrackRiffTab(byTitle('Back In Black'))
+    expect(backInBlack).toMatchObject({
+      kind: 'signature',
+      title: 'Back In Black — signature riff',
+      tuning: 'E Standard (E A D G B E)',
+      bpm: 94,
+    })
+    expect(backInBlack.lines.E).toBe('|-0-0-2---|')
+  })
+
+  it('matches remaster/live title variants and artist casing', () => {
+    const ironMan = getTrackRiffTab({
+      id: 99,
+      subgenre: 'Heavy Metal',
+      artist: 'BLACK SABBATH',
+      title: 'Iron Man (2012 - Remaster)',
+    })
+    expect(ironMan.kind).toBe('signature')
+    expect(ironMan.lines.E.startsWith('|-7-10-10-12-12-15-14-15-')).toBe(true)
+    expect(normalizeTitleKey('Sweet Child O’ Mine [Live] - Remastered 2004')).toBe(
+      "sweet child o' mine",
+    )
+  })
+
+  it('keeps the honest practice riff for songs without a curated signature riff', () => {
+    expect(getTrackRiffTab(byTitle('Paranoid')).kind).toBe('practice')
+    expect(getTrackRiffTab({ ...byTitle('Back In Black'), artist: 'Some Cover Band' }).kind).toBe(
+      'practice',
+    )
+  })
+})
+
+describe('getTabColumns', () => {
+  it('returns one padded column per step that joins back into the rendered lines', () => {
+    const steps = [{ E: 10 }, { E: 0, A: 2 }, { G: 7 }]
+    const columns = getTabColumns(steps)
+    expect(columns.map((column) => column.width)).toEqual([2, 1, 1])
+    expect(columns[0]?.cells).toEqual({ e: '--', B: '--', G: '--', D: '--', A: '--', E: '10' })
+
+    const lines = renderTab(steps)
+    for (const string of GUITAR_STRINGS) {
+      expect('|-' + columns.map((column) => `${column.cells[string]}-`).join('') + '|').toBe(
+        lines[string],
+      )
+    }
+  })
+})
+
+describe('getRiffPlayheadIndex', () => {
+  it('advances stepsPerBeat columns per beat and loops over the riff', () => {
+    // 120 BPM × 2 steps per beat = 4 columns per second
+    expect(getRiffPlayheadIndex(0, 120, 8)).toBe(0)
+    expect(getRiffPlayheadIndex(0.26, 120, 8)).toBe(1)
+    expect(getRiffPlayheadIndex(1, 120, 8)).toBe(4)
+    expect(getRiffPlayheadIndex(2, 120, 8)).toBe(0) // wrapped after 8 columns
+    expect(getRiffPlayheadIndex(1, 60, 6, 3)).toBe(3)
+  })
+
+  it('returns null when there is nothing to highlight, and clamps negative time', () => {
+    expect(getRiffPlayheadIndex(5, 120, 0)).toBeNull()
+    expect(getRiffPlayheadIndex(5, 0, 8)).toBeNull()
+    expect(getRiffPlayheadIndex(Number.NaN, 120, 8)).toBeNull()
+    expect(getRiffPlayheadIndex(-3, 120, 8)).toBe(0)
   })
 })

@@ -21,11 +21,26 @@ export type RiffFamily =
 /** One tab column: the fret played on each sounding string (omitted strings rest). */
 export type RiffStep = Partial<Record<GuitarString, number>>
 
+/** One rendered tab column: each string's cell padded to the column width (no separators). */
+export interface TabColumn {
+  width: number
+  cells: Record<GuitarString, string> // e.g. { e: "--", …, E: "10" }
+}
+
+/**
+ * - 'signature': a simplified transcription of the song's own opening riff (curated list)
+ * - 'practice': a style-based practice riff for the track's subgenre (not a transcription)
+ */
+export type RiffTabKind = 'signature' | 'practice'
+
 export interface GuitarRiffTab {
-  title: string // e.g. "Metalcore practice riff"
+  kind: RiffTabKind
+  title: string // e.g. "Iron Man — signature riff" or "Metalcore practice riff"
   family: RiffFamily
   tuning: string // e.g. "Drop C (C G C F A D)"
-  bpm: number // suggested practice tempo
+  bpm: number // approximate tempo for playing along
+  stepsPerBeat: number // tab columns per beat (2 = eighth notes), drives the playhead
   difficulty: RiffDifficulty
+  columns: TabColumn[] // one per step, for the playhead highlight
   lines: Record<GuitarString, string> // e.g. { e: "|-----|", …, E: "|-0-0-|" }, all equal length
 }

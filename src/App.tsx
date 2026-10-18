@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { fetchCatalog } from './api/itunes'
+import { fetchCatalog, getCachedCatalog } from './api/itunes'
+import MiniPlayer from './components/MiniPlayer'
 import Navbar from './components/Navbar'
 import ArenaPage from './pages/ArenaPage'
 import CatalogPage from './pages/CatalogPage'
 import NotFoundPage from './pages/NotFoundPage'
 import SetlistPage from './pages/SetlistPage'
 import TrackDetailPage from './pages/TrackDetailPage'
-import type { FetchStatus, Track } from './types/track'
+import type { FetchStatus, Track, TrackFilters } from './types/track'
 import {
   getBrowserStorage,
   loadSetlist,
@@ -15,24 +16,42 @@ import {
   saveSetlist,
   toggleTrackInList,
 } from './utils/setlistUtils'
+import { DEFAULT_FILTERS } from './utils/trackUtils'
 import './App.css'
 
 function App() {
-  const [tracks, setTracks] = useState<Track[]>([])
-  const [status, setStatus] = useState<FetchStatus>('loading')
+  // A cached catalog (memory or localStorage) renders on the very first frame, with no loading state.
+  const [tracks, setTracks] = useState<Track[]>(() => getCachedCatalog() ?? [])
+  const [status, setStatus] = useState<FetchStatus>(() => (getCachedCatalog() ? 'success' : 'loading'))
+  // False while later batch responses are still being merged in (progressive loading).
+  const [isCatalogComplete, setIsCatalogComplete] = useState(() => getCachedCatalog() !== null)
   const [error, setError] = useState<string | null>(null)
   // Bumped by "Retry" to re-run the fetch effect.
   const [requestId, setRequestId] = useState(0)
 
+  // Catalog filters live here (not in CatalogPage) so they survive visits to other routes.
+  const [catalogFilters, setCatalogFilters] = useState<TrackFilters>(DEFAULT_FILTERS)
+
   useEffect(() => {
     const controller = new AbortController()
 
-    // Retry (requestId > 0) bypasses the session cache; the first load may be served from it.
-    fetchCatalog({ signal: controller.signal, forceRefresh: requestId > 0 })
+    fetchCatalog({
+      signal: controller.signal,
+      // Retry (requestId > 0) bypasses the caches; the first load may be served from them.
+      forceRefresh: requestId > 0,
+      // Show tracks as soon as the fastest request lands; later responses merge in.
+      onProgress: (tracksSoFar) => {
+        if (controller.signal.aborted) return
+        setTracks(tracksSoFar)
+        setStatus('success')
+        setIsCatalogComplete(false)
+      },
+    })
       .then((catalog) => {
         if (controller.signal.aborted) return
         setTracks(catalog)
         setStatus('success')
+        setIsCatalogComplete(true)
       })
       .catch((fetchError: unknown) => {
         // Aborted by cleanup (unmount, StrictMode re-run, or a newer request) — not a real error.
@@ -51,6 +70,7 @@ function App() {
   const handleRetry = () => {
     setError(null)
     setStatus('loading')
+    setIsCatalogComplete(false)
     setRequestId((id) => id + 1)
   }
 
@@ -84,6 +104,9 @@ function App() {
                 status={status}
                 error={error}
                 onRetry={handleRetry}
+                isLoadingMore={status === 'success' && !isCatalogComplete}
+                filters={catalogFilters}
+                onFiltersChange={setCatalogFilters}
                 isInSetlist={isInSetlist}
                 onToggleSetlist={toggleSetlistTrack}
               />
@@ -122,6 +145,8 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </main>
+      {/* Outside <Routes>, so the Now Playing bar (and the playback it controls) survives navigation. */}
+      <MiniPlayer />
     </BrowserRouter>
   )
 }

@@ -1,9 +1,13 @@
 import type { Track } from '../types/track'
+import { dedupeTracks } from './trackUtils'
 import { reviveStoredTracks } from './setlistUtils'
 
-/** Bump the version whenever the query strategy or Track shape changes, to drop old caches. */
-export const CATALOG_CACHE_KEY = 'rmv:catalog:v2'
-export const CATALOG_CACHE_TTL_MS = 30 * 60 * 1000 // 30 minutes
+/**
+ * localStorage key for the normalized catalog (shared by every tab, survives reloads).
+ * Bump the version whenever the query strategy or Track shape changes, to drop old caches.
+ */
+export const CATALOG_CACHE_KEY = 'rmv:catalog:v3'
+export const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
 interface CatalogCacheEntry {
   savedAt: number // epoch ms
@@ -39,4 +43,12 @@ export function parseCatalogCache(
 
   const revived = reviveStoredTracks(tracks)
   return revived.length > 0 ? revived : null
+}
+
+/**
+ * Merges a newly arrived batch response into the catalog shown so far (progressive loading):
+ * tracks already on screen keep their place, new ones are appended, duplicate ids are dropped.
+ */
+export function mergeCatalogTracks(current: readonly Track[], incoming: readonly Track[]): Track[] {
+  return dedupeTracks([...current, ...incoming])
 }

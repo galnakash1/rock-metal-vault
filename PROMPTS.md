@@ -242,3 +242,26 @@ Tested FilterBar (search, mood pills, country/style/artist filters) and listened
 > Stop after completing this catalog expansion and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Tested the Festival Lineup & Poster Builder (/setlist) and verified the expanded catalog (292 tracks across 19 countries including Israel and Scandinavia). Noted 3 UX issues during browser testing to fix next: initial load time, filter state resetting on back navigation, and keeping audio playing across pages.
+**19:46 · claude**
+
+> <pasted_content id="5dbb">
+> Task 6 and the global catalog expansion are committed. After testing the app in the browser, I found 3 UX issues that I want to fix before we move to Task 7:
+> 
+> 1. **Preserve Catalog Filters Across Navigation (Lift Filter State Up):**
+>    - Currently, when I filter tracks on `/` (e.g., by Country = Israel or a specific Style/Mood), click a track to open `/tracks/:id`, and navigate back to `/`, all my filters reset because filter state lives inside `CatalogPage.tsx`.
+>    - Lift the catalog `filters` and `sortBy` state up to `App.tsx` and pass them down via props to `CatalogPage` so that navigating to `/tracks/:id`, `/setlist`, or `/arena` and coming back preserves the exact search, mood, country, style, artist, and sort selections.
+> 
+> 2. **Persistent Audio Playback Across Routes (Global Audio + Mini-Player Bar):**
+>    - Currently, when a track preview is playing in the Amp Console on `/tracks/:id` and I navigate back to `/` or `/setlist`, playback stops because the `<audio>` element unmounts with `TrackDetailPage`.
+>    - Keep the underlying `<audio>` / Web Audio engine alive at the `App` level (or via a shared persistent player architecture) so that when a user starts playing a track on `/tracks/:id` and navigates to another route, the music keeps playing seamlessly!
+>    - When a track is actively loaded/playing and the user is NOT on that track's `/tracks/:id` page, display a sleek persistent bottom **Now Playing Mini-Bar** (showing artwork, track title, artist, country flag, play/pause button, current EQ preset badge, a link back to `/tracks/${track.id}`, and a close/stop button). When returning to `/tracks/:id` for the currently playing track, the full Amp Console and Guitar Riff Tab should seamlessly reflect and control that ongoing playback without restarting it.
+> 
+> 3. **Faster Initial Load Time:**
+>    - Opening the app in a fresh tab took several seconds because `Promise.all` waited for all 4 iTunes requests (including the slower multi-artist lookup) before rendering anything, and `sessionStorage` doesn't persist across new tabs.
+>    - Speed this up in two ways:
+>      a) **Progressive Rendering:** Render the catalog as soon as the fastest initial iTunes search request resolves so the user sees tracks on screen within ~0.5s, and smoothly merge/deduplicate the remaining batch responses as they arrive in the background.
+>      b) **Persistent Cache (`localStorage`):** Cache the normalized catalog in `localStorage` (with a reasonable TTL and safe fallback) in addition to memory so opening the app in a new tab or reloading is near-instant (0ms), while "Retry" still forces a fresh network fetch.
+> 
+> Please implement these 3 improvements now, update `docs/architecture.md` and unit tests as needed, and verify that `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`. Stop when done and summarize in 3 sentences.
+> </pasted_content id="5dbb">
+Verified the 3 UX fixes in the browser: initial load time dropped to ~60ms via localStorage caching and progressive loading, filters persist across navigation via state lifting to App.tsx, and audio playback continues seamlessly via persistent playerEngine and MiniPlayer. Marked UX fixes as done in tasks.md.

@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AudioPreviewPlayer from '../components/AudioPreviewPlayer'
 import RiffTabPanel from '../components/RiffTabPanel'
 import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
+import { usePlayer } from '../hooks/usePlayer'
+import type { GuitarRiffTab } from '../types/riff'
 import type { FetchStatus, Track } from '../types/track'
 import { getRiffPlayheadIndex, getTrackRiffTab } from '../utils/riffTabs'
 import { formatDuration } from '../utils/trackUtils'
@@ -39,7 +41,7 @@ function TrackDetailPage({
       : (tracks.find((item) => item.id === trackId) ?? setlist.find((item) => item.id === trackId))
 
   if (track) {
-    // Keyed by id so playback state and the audio graph start fresh for every track.
+    // Keyed by id so per-track view state resets; playback itself lives in the global player.
     return (
       <TrackDetailView
         key={track.id}
@@ -76,11 +78,6 @@ function TrackDetailPage({
   )
 }
 
-interface Playback {
-  seconds: number
-  isPlaying: boolean
-}
-
 interface TrackDetailViewProps {
   track: Track
   inSetlist: boolean
@@ -88,17 +85,7 @@ interface TrackDetailViewProps {
 }
 
 function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewProps) {
-  const [playback, setPlayback] = useState<Playback>({ seconds: 0, isPlaying: false })
   const riffTab = useMemo(() => getTrackRiffTab(track), [track])
-
-  const handleProgress = useCallback((seconds: number, isPlaying: boolean) => {
-    setPlayback({ seconds, isPlaying })
-  }, [])
-
-  const hasStarted = playback.isPlaying || playback.seconds > 0
-  const activeStep = hasStarted
-    ? getRiffPlayheadIndex(playback.seconds, riffTab.bpm, riffTab.columns.length, riffTab.stepsPerBeat)
-    : null
 
   return (
     <article className="track-detail">
@@ -171,15 +158,26 @@ function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewP
       </div>
 
       <div className="track-detail-studio">
-        <AudioPreviewPlayer
-          src={track.previewUrl}
-          title={`${track.title} by ${track.artist}`}
-          onProgress={handleProgress}
-        />
-        <RiffTabPanel tab={riffTab} subgenre={track.subgenre} activeStep={activeStep} />
+        <AudioPreviewPlayer track={track} />
+        <LiveRiffTab track={track} tab={riffTab} />
       </div>
     </article>
   )
+}
+
+/**
+ * The riff tab with a playhead synced to the global player. Only this small component
+ * subscribes to playback updates, so the rest of the detail page doesn't re-render each frame.
+ */
+function LiveRiffTab({ track, tab }: { track: Track; tab: GuitarRiffTab }) {
+  const player = usePlayer()
+  const isCurrent = player.track?.id === track.id
+  const hasStarted = isCurrent && (player.isPlaying || player.currentTime > 0)
+  const activeStep = hasStarted
+    ? getRiffPlayheadIndex(player.currentTime, tab.bpm, tab.columns.length, tab.stepsPerBeat)
+    : null
+
+  return <RiffTabPanel tab={tab} subgenre={track.subgenre} activeStep={activeStep} />
 }
 
 export default TrackDetailPage

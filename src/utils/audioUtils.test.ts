@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { EQ_PRESETS, EQ_PRESET_IDS, bucketFrequencies } from './audioUtils'
+import {
+  EQ_PRESETS,
+  EQ_PRESET_IDS,
+  bucketFrequencies,
+  getTrackIdFromPath,
+  shouldShowMiniPlayer,
+} from './audioUtils'
 
 describe('EQ_PRESETS', () => {
   it('defines the four Amp Console presets in button order', () => {
@@ -41,5 +47,23 @@ describe('bucketFrequencies', () => {
     expect(bucketFrequencies(new Uint8Array(0), 4)).toEqual([0, 0, 0, 0])
     expect(bucketFrequencies(Uint8Array.from([255, 0]), 4, 1)).toEqual([1, 1, 0, 0])
     expect(bucketFrequencies(Uint8Array.from([255]), 0)).toEqual([])
+  })
+})
+
+describe('Now Playing mini-player visibility', () => {
+  it('reads the track id from a detail route only', () => {
+    expect(getTrackIdFromPath('/tracks/574050602')).toBe(574050602)
+    expect(getTrackIdFromPath('/tracks/574050602/')).toBe(574050602)
+    expect(getTrackIdFromPath('/tracks/abc')).toBeNull()
+    expect(getTrackIdFromPath('/setlist')).toBeNull()
+    expect(getTrackIdFromPath('/')).toBeNull()
+  })
+
+  it('shows on every route except the loaded track’s own detail page', () => {
+    expect(shouldShowMiniPlayer(574050602, '/')).toBe(true)
+    expect(shouldShowMiniPlayer(574050602, '/setlist')).toBe(true)
+    expect(shouldShowMiniPlayer(574050602, '/tracks/785232521')).toBe(true) // another track
+    expect(shouldShowMiniPlayer(574050602, '/tracks/574050602')).toBe(false)
+    expect(shouldShowMiniPlayer(null, '/')).toBe(false) // nothing loaded
   })
 })

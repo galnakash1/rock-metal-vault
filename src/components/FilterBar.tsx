@@ -12,6 +12,7 @@ export interface FilterBarProps {
   totalCount: number
   resultDurationMs: number
   canReset: boolean
+  isLoadingMore?: boolean // more bands still arriving (progressive loading)
   onChange: (next: TrackFilters) => void
   onReset: () => void
 }
@@ -35,6 +36,7 @@ function FilterBar({
   totalCount,
   resultDurationMs,
   canReset,
+  isLoadingMore = false,
   onChange,
   onReset,
 }: FilterBarProps) {
@@ -149,6 +151,7 @@ function FilterBar({
       <p className="filter-summary" role="status">
         Showing <strong>{resultCount}</strong> of {totalCount} tracks ·{' '}
         {formatDuration(resultDurationMs)} total
+        {isLoadingMore && <span className="filter-loading-more"> · Loading more bands…</span>}
       </p>
     </section>
   )

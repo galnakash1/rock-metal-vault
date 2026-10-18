@@ -1011,6 +1011,124 @@
   }
 }
 
+/* ---------- Now Playing mini-player ---------- */
+.mini-player-spacer {
+  height: 88px;
+}
+
+.mini-player {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px max(16px, calc((100vw - 960px) / 2));
+  border-top: 1px solid var(--border);
+  background: rgb(18 18 21 / 92%);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 -12px 32px rgb(0 0 0 / 45%);
+}
+
+.mini-player-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--amber));
+  transform-origin: left;
+}
+
+.mini-player-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.mini-player-track:hover .mini-player-title {
+  text-decoration: underline;
+}
+
+.mini-player-art {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+}
+
+.mini-player-text {
+  display: grid;
+  min-width: 0;
+}
+
+.mini-player-title {
+  overflow: hidden;
+  color: #fff;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-player-artist {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-player-eq {
+  padding: 2px 10px;
+  border: 1px solid #8a6a1f;
+  border-radius: 999px;
+  color: var(--amber);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.mini-player-time {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.mini-player-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mini-player-button--play {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+
+.filter-loading-more {
+  color: var(--amber);
+}
+
+@media (max-width: 640px) {
+  .mini-player {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+  }
+
+  .mini-player-eq,
+  .mini-player-time {
+    display: none;
+  }
+}
+
 /* ---------- Utilities ---------- */
 .sr-only {
   position: absolute;

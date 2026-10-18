@@ -119,6 +119,18 @@
 
 ---
 
+## UX fixes (between Tasks 6 and 7) — Remembered filters, persistent audio, faster loading
+
+- [ ] **Goal:** Fix 3 issues found while testing in the browser.
+- **Files:** `src/App.tsx`, `src/pages/CatalogPage.tsx`, `src/components/FilterBar.tsx`, `src/audio/playerEngine.ts`, `src/hooks/usePlayer.ts` (replaces `useAmpConsole.ts`), `src/components/AudioPreviewPlayer.tsx`, `src/components/MiniPlayer.tsx`, `src/pages/TrackDetailPage.tsx`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/audioUtils.ts`, `src/App.css` (+ tests)
+- **Steps:**
+  1. Lift `TrackFilters` (incl. sort) from `CatalogPage` into `App`, so filters survive navigation.
+  2. Move playback into a module-level player engine (one `<audio>` + Web Audio graph, `useSyncExternalStore`). The Amp Console becomes a view onto it, and a `MiniPlayer` outside `<Routes>` keeps it controllable on other routes.
+  3. Progressive catalog rendering (`onProgress` after each request, `mergeCatalogTracks`), a 6 h `localStorage` cache read synchronously on the first render, and lookups split into 4 × ~16 ids (uncached: ~2 s instead of 5–12 s).
+- **Done when:** filters survive `/tracks/:id`, `/setlist`, `/arena`, and Back; a preview keeps playing across routes with the mini-bar, and returning to its page continues it; a new tab shows the cached catalog instantly with no requests; and `npm test`, `npm run build`, and `npm run lint` pass.
+
+---
+
 ## Task 7 — Riff Arena: Blind-Test Challenge and Head-to-Head
 
 - [ ] **Goal:** Add the interactive guessing game and track comparison.

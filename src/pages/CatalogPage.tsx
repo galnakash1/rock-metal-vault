@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import FilterBar from '../components/FilterBar'
 import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
@@ -22,6 +22,11 @@ export interface CatalogPageProps {
   onRetry: () => void
   isInSetlist: (trackId: number) => boolean
   onToggleSetlist: (track: Track) => void
+  /** Owned by App so search, mood, country, style, artist and sort survive navigation. */
+  filters: TrackFilters
+  onFiltersChange: (next: TrackFilters) => void
+  /** True while more batch responses are still being merged into the catalog. */
+  isLoadingMore: boolean
 }
 
 function CatalogPage({
@@ -31,9 +36,10 @@ function CatalogPage({
   onRetry,
   isInSetlist,
   onToggleSetlist,
+  filters,
+  onFiltersChange,
+  isLoadingMore,
 }: CatalogPageProps) {
-  const [filters, setFilters] = useState<TrackFilters>(DEFAULT_FILTERS)
-
   // Everything below is derived from tracks + filters — never stored in state.
   const visibleTracks = useMemo(
     () => sortTracks(filterTracks(tracks, filters), filters.sort),
@@ -48,7 +54,7 @@ function CatalogPage({
     [tracks],
   )
 
-  const resetFilters = () => setFilters(DEFAULT_FILTERS)
+  const resetFilters = () => onFiltersChange(DEFAULT_FILTERS)
 
   return (
     <section>
@@ -92,7 +98,8 @@ function CatalogPage({
             totalCount={tracks.length}
             resultDurationMs={getTotalDuration(visibleTracks)}
             canReset={hasActiveFilters(filters) || filters.sort !== DEFAULT_FILTERS.sort}
-            onChange={setFilters}
+            isLoadingMore={isLoadingMore}
+            onChange={onFiltersChange}
             onReset={resetFilters}
           />
 

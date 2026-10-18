@@ -25,15 +25,18 @@ src/
 │   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh }): 3 searches + 1 artist lookup, cached
 │   └── itunes.test.ts        # request-plan tests (no network)
 │
+├── audio/
+│   └── playerEngine.ts       # App-wide preview player: one <audio> + Web Audio graph + store
+│
 ├── hooks/
-│   └── useAmpConsole.ts      # Web Audio graph (EQ filters + analyser) for the Amp Console
+│   └── usePlayer.ts          # useSyncExternalStore subscription to the player engine
 │
 ├── utils/
 │   ├── trackUtils.ts         # Pure functions: validate, normalize + enrich, filter, sort, moods, lineup, arena
 │   ├── trackUtils.test.ts    # Vitest unit tests (utils, enrichment, moods, riff tabs)
 │   ├── setlistUtils.ts       # Setlist toggle/remove, localStorage load/save, festival lineup tiers
 │   ├── setlistUtils.test.ts
-│   ├── catalogCache.ts       # sessionStorage catalog cache (serialize / parse with TTL)
+│   ├── catalogCache.ts       # localStorage catalog cache (serialize / parse with TTL) + progressive merge
 │   ├── catalogCache.test.ts
 │   ├── artistMetadata.ts     # Curated artist → origin country/flag + subgenre map, with fallback
 │   ├── riffTabs.ts           # Style-based 6-string practice riffs: profiles, templates, renderer
@@ -45,7 +48,8 @@ src/
 │   ├── TrackCard.tsx
 │   ├── FilterBar.tsx
 │   ├── MoodCapsules.tsx      # Signature 1
-│   ├── AudioPreviewPlayer.tsx# Signature 2 — the Amp Console
+│   ├── AudioPreviewPlayer.tsx# Signature 2 — the Amp Console (a view onto the global player)
+│   ├── MiniPlayer.tsx        # Now Playing bar, shown on every route but the playing track's page
 │   ├── RiffTabPanel.tsx      # Guitar Riff Tab panel (detail page)
 │   ├── StatusMessage.tsx
 │   ├── SetlistButton.tsx
@@ -67,35 +71,40 @@ src/
 **Components** are reusable building blocks. They get data and callbacks through props and never fetch catalog data themselves.
 
 ```
-<App>                                             owns: catalog fetch (useEffect), setlist (useState + localStorage)
+<App>                          owns: catalog fetch + progressive merge (useEffect), catalog filters,
+│                                    setlist (useState + localStorage)
 └── <BrowserRouter>
     ├── <Navbar setlistCount />
-    └── <Routes>
-        ├── "/"            <CatalogPage tracks status error onRetry isInSetlist onToggleSetlist>
-        │                   ├── <StatusMessage />          (loading / error / empty results)
-        │                   ├── <FilterBar filters countries subgenres artists onChange resultCount totalCount />
-        │                   ├── <MoodCapsules activeMood={filters.mood} onChange />
-        │                   └── <TrackCard track inSetlist onToggleSetlist />  × N
-        │                         └── <SetlistButton />
-        │
-        ├── "/tracks/:id"  <TrackDetailPage tracks status setlist isInSetlist onToggleSetlist>
-        │                   ├── <StatusMessage />          (loading / not found)
-        │                   ├── <AudioPreviewPlayer src title />   (Amp Console)
-        │                   ├── <RiffTabPanel tab={getTrackRiffTab(track)} />
-        │                   └── <SetlistButton />
-        │
-        ├── "/setlist"     <SetlistPage setlist onRemove onClear>
-        │                   ├── <StatusMessage />          (empty lineup)
-        │                   ├── theme switcher             (radio group)
-        │                   ├── <FestivalPoster lineup theme />
-        │                   └── manage list → Remove buttons + Clear setlist
-        │
-        ├── "/arena"       <ArenaPage tracks status>
-        │                   ├── <StatusMessage />
-        │                   ├── <BlindTestGame tracks />
-        │                   └── Head-to-Head → <TrackSelect /> × 2 + comparison table
-        │
-        └── "*"            <NotFoundPage />
+    ├── <Routes>
+    │   ├── "/"            <CatalogPage tracks status error onRetry isLoadingMore
+    │   │                               filters onFiltersChange isInSetlist onToggleSetlist>
+    │   │                   ├── <StatusMessage />   (loading / error / no matches)
+    │   │                   ├── <FilterBar filters countries subgenres artists … isLoadingMore />
+    │   │                   │     └── <MoodCapsules activeMood={filters.mood} onChange />
+    │   │                   └── <TrackCard track actions={<SetlistButton />} />  × N
+    │   │
+    │   ├── "/tracks/:id"  <TrackDetailPage tracks status setlist isInSetlist onToggleSetlist>
+    │   │                   ├── <StatusMessage />   (loading / not found)
+    │   │                   └── <TrackDetailView key={track.id}>
+    │   │                         ├── <SetlistButton />
+    │   │                         ├── <AudioPreviewPlayer track />   (Amp Console → global player)
+    │   │                         └── <LiveRiffTab> → <RiffTabPanel tab activeStep />
+    │   │
+    │   ├── "/setlist"     <SetlistPage setlist onRemove onClear>
+    │   │                   ├── <StatusMessage />   (empty lineup)
+    │   │                   ├── theme switcher (radio group) + <FestivalPoster lineup theme />
+    │   │                   └── running order → Remove buttons + Clear Lineup
+    │   │
+    │   ├── "/arena"       <ArenaPage tracks status error onRetry>
+    │   │                   ├── <BlindTestGame tracks />
+    │   │                   └── Head-to-Head → <TrackSelect /> × 2 + comparison table
+    │   │
+    │   └── "*"            <NotFoundPage />
+    └── <MiniPlayer />     Now Playing bar — outside <Routes>, so it survives navigation
+
+playerEngine.ts (module store, outside React): one <audio> + Web Audio graph
+    ↑ actions: togglePlay · seek · setPreset · stop        ↓ usePlayer() snapshot
+    AudioPreviewPlayer · LiveRiffTab · MiniPlayer
 ```
 
 ### Reusable components
@@ -106,7 +115,8 @@ src/
 | `TrackCard` | 300px artwork, title, artist, origin flag + country, style badge, release year, duration, explicit badge; links to `/tracks/:id`. An `actions` slot outside the link holds the Task 6 setlist toggle | `track`, `actions?: ReactNode` |
 | `FilterBar` | Controlled search input + Reset filters button, `MoodCapsules`, Origin Country `<select>` (flag + name), Style `<select>`, Artist `<select>`, Sort `<select>`, and a live "Showing X of Y tracks · total" summary | `filters`, `countries`, `subgenres`, `artists`, `resultCount`, `totalCount`, `resultDurationMs`, `canReset`, `onChange`, `onReset` |
 | `MoodCapsules` | "All" + one toggle pill (`aria-pressed`) per `MOOD_CAPSULES` entry; clicking the active pill returns to All. Rendered inside `FilterBar` | `activeMood: MoodId \| null`, `onChange` |
-| `AudioPreviewPlayer` | **Amp Console:** `<audio crossOrigin="anonymous">` + play/pause, scrubber and time display, `<canvas>` frequency bars, EQ preset buttons, and a plain-audio fallback note; uses `useAmpConsole` | `src`, `title`, `onProgress?(seconds, isPlaying)` |
+| `AudioPreviewPlayer` | **Amp Console:** play/pause, scrubber and time display, `<canvas>` frequency bars, EQ preset buttons, and a plain-audio fallback note. It owns no audio itself: it reads `usePlayer()` and calls the player engine, so if its track is already playing it picks that playback up | `track` |
+| `MiniPlayer` | **Now Playing bar** (fixed bottom): artwork, title, artist + flag, EQ preset badge, time, progress line, play/pause, link back to `/tracks/:id`, and ✕ stop. Hidden when nothing is loaded and on the loaded track's own detail page (`shouldShowMiniPlayer`) | — (reads `usePlayer()` + `useLocation()`) |
 | `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `retryLabel?`, `action?` |
 | `SetlistButton` | "Add to Setlist" / "Remove from Setlist" toggle (label and `aria-label` change with state); calls `preventDefault` + `stopPropagation`, so it never triggers a surrounding card link. `compact` variant on cards | `trackTitle`, `inSetlist`, `onToggle`, `variant?` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large display type), Main Stage underbill, origin flags + styles, and tracks/bands/runtime stats; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
@@ -337,9 +347,7 @@ export interface MoodCapsulesProps {
 }
 
 export interface AudioPreviewPlayerProps {
-  src: string
-  title: string
-  onProgress?: (seconds: number, isPlaying: boolean) => void   // drives the riff playhead
+  track: Track                   // playback state comes from the global player (usePlayer)
 }
 
 export interface FestivalPosterProps {
@@ -369,14 +377,13 @@ There are no external state libraries — just React state, custom hooks, and pr
 | --- | --- | --- | --- |
 | Catalog `tracks`, `status`, `error` (+ `requestId` for retries) | `App` (`useState` + `useEffect`) | Needed by Catalog, Detail, and Arena; fetched **once** (rate limits) and shared | Props → pages |
 | `setlist: Track[]` + actions | `App` (`useState` lazily loaded from `localStorage`, saved back in `useEffect`) | Needed by the Navbar badge, cards, Detail, and the Setlist page | Props → `Navbar`, pages → `TrackCard` / `SetlistButton` |
-| `filters: TrackFilters` (search, country, subgenre, artist, mood, sort) | `CatalogPage` (`useState`) | Only the catalog uses it | Props → `FilterBar` and `MoodCapsules` (`filters.mood`); `onChange` callbacks go back up |
+| `filters: TrackFilters` (search, country, subgenre, artist, mood, sort) | `App` (`useState`) | Lifted out of `CatalogPage` so it survives visits to `/tracks/:id`, `/setlist`, `/arena` (the page unmounts, the state doesn't) | Props → `CatalogPage` → `FilterBar` / `MoodCapsules`; `onFiltersChange` goes back up |
+| `isCatalogComplete` | `App` (`useState`) | False while later batch responses are still merging in | `isLoadingMore` → "Loading more bands…" in the `FilterBar` summary |
 | Visible tracks | Derived in `CatalogPage`: `useMemo(() => sortTracks(filterTracks(tracks, filters), filters.sort))` | Derived data — never stored in state | Props → `TrackCard`s |
 | Country / style / artist options | Derived with `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | Derived | Props → `FilterBar` |
-| Riff tab | Derived in `TrackDetailView`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `RiffTabPanel` |
-| Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` | Single source of truth is the URL | Rendered by `TrackDetailView` with `key={track.id}`, so playback state and the audio graph reset per track |
-| Playback `{ seconds, isPlaying }` | `TrackDetailView` (`useState`), updated by `AudioPreviewPlayer`'s `onProgress` every animation frame | Shared by the Amp Console and the riff playhead | `getRiffPlayheadIndex` → `RiffTabPanel` `activeStep` |
-| EQ preset, play state, progress | `AudioPreviewPlayer` (`useState`) | Local to one player | `useAmpConsole` |
-| Audio graph nodes, animation frame id | `useAmpConsole` (`useRef`) | Mutable, non-render data | — |
+| Riff tab | Derived in `TrackDetailView`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `LiveRiffTab` → `RiffTabPanel` |
+| Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` (then `setlist`) | Single source of truth is the URL | Rendered by `TrackDetailView` with `key={track.id}` |
+| **Playback** (loaded track, playing, time, duration, EQ preset, engine state, error) | `playerEngine.ts` — a module-level store outside React (one `<audio>` + one Web Audio graph per page) | Must outlive route changes; 60 fps time updates must not re-render `App` and the catalog | `usePlayer()` (`useSyncExternalStore`) in `AudioPreviewPlayer`, `LiveRiffTab`, `MiniPlayer` only; actions (`togglePlay`, `seek`, `setPreset`, `stop`) are called directly |
 | Poster theme | `SetlistPage` (`useState`) | Page-local | Props → `FestivalPoster` |
 | Festival lineup | Derived in `SetlistPage`: `useMemo(() => buildFestivalLineup(setlist))` | Derived | Props → `FestivalPoster` |
 | Round, guess, score, elapsed time | `BlindTestGame` (`useState`) | Local to the game | Local render |
@@ -388,10 +395,11 @@ There are no external state libraries — just React state, custom hooks, and pr
 ### Catalog fetch — `useEffect` in `App` + `fetchCatalog()`
 
 - `App` calls `fetchCatalog({ signal, forceRefresh: requestId > 0 })` inside `useEffect`.
-- **Request plan (4 requests):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each) plus 1 **Lookup API** call with every `SPOTLIGHT_ARTIST_IDS` id (`lookup?id=…&entity=song&limit=3`; Apple applies the limit per artist). Ids are chunked at 100 per lookup. Each request has a 15 s timeout (`AbortSignal.timeout`), and HTTP 429 gets a rate-limit message.
-- `Promise.allSettled`: if some requests fail, the others still produce a catalog (not written to the session cache, so the next session retries). It only throws when nothing came back.
+- **Request plan (7 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each) plus 4 parallel **Lookup API** calls covering every `SPOTLIGHT_ARTIST_IDS` id (`lookup?id=…&entity=song&limit=3`; Apple applies the limit per artist). Ids are chunked at **16 per lookup**: uncached lookups slow down sharply with more ids (61 ids in one call took 5–12 s; 4 × ~16 in parallel take ~2 s). Each request has a 15 s timeout (`AbortSignal.timeout`), and HTTP 429 gets a rate-limit message.
+- **Progressive rendering:** every request merges its tracks into the shared batch the moment it lands (`mergeCatalogTracks` keeps tracks on screen in place and drops duplicate ids), and `onProgress(tracksSoFar)` lets `App` render right away. The catalog appears after the fastest search (~0.8 s cold in a production build), and the rest merge in with a "Loading more bands…" note (full catalog ~1.8 s).
+- `Promise.allSettled`: if some requests fail, the others still produce a catalog (not persisted, so the next load retries). It only throws when nothing came back.
 - Every body is validated with `parseSearchResults` (dropping malformed entries and Lookup's artist wrappers), normalized + enriched, de-duplicated by `trackId` (`normalizeTracks` → `dedupeTracks`) so React keys are always unique, and filtered with `isVaultTrack`.
-- **Caching & sharing:** memory cache → `sessionStorage` (`rmv:catalog:v2`, 30 min TTL, re-validated via `parseCatalogCache`) → one shared in-flight batch. The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`), so StrictMode's mount → unmount → mount fires the network batch once. `forceRefresh` (Retry) clears both caches and starts a new batch.
+- **Caching & sharing:** memory cache → **`localStorage`** (`rmv:catalog:v3`, 6 h TTL, shared by every tab, re-validated via `parseCatalogCache`) → one shared in-flight batch. `App` reads `getCachedCatalog()` synchronously in its `useState` initializers, so a cached load renders the full catalog on the first frame (~60 ms, no loading state, no requests). The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`) and unsubscribes its `onProgress`, so StrictMode's mount → unmount → mount fires the network batch once (a caller joining mid-batch immediately gets the tracks so far). `forceRefresh` (Retry) clears both caches and starts a new batch.
 - `App` holds `tracks`, `status: FetchStatus` (initially `'loading'`), and `error: string | null`, and passes them, plus `onRetry`, to Catalog, Detail, and Arena.
 - **Retry:** `handleRetry` sets `status` back to `'loading'` and bumps a `requestId` counter, which is the effect's dependency, so the effect runs again. State is never set synchronously inside the effect body.
 - Uses an `AbortController` in the effect cleanup; results and errors that arrive after an abort are ignored. React StrictMode's double-mount and fast navigation never update state from a stale request.
@@ -416,7 +424,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 - `matchesMood(track, mood)` holds the rules: `≥ 300 000 ms`; `year ≥ 2010 && (/metal/i.test(genre) || /metal|core/i.test(subgenre))`; `1970 ≤ year ≤ 1989`; `< 210 000 ms`. Tracks with a `null` year never match the year-based moods. The style check means "Hard Rock"-tagged metalcore bands (e.g. Bring Me The Horizon) still count.
 - The mood is part of `TrackFilters`, and `filterTracks` applies it (`mood: null` = no capsule), so moods combine (AND) with search and the other filters.
 
-### 2 — Amp Console Player (`AudioPreviewPlayer` + `useAmpConsole`)
+### 2 — Amp Console Player (global `playerEngine` + `AudioPreviewPlayer` + `MiniPlayer`)
 
 ```
 <audio crossOrigin="anonymous">
@@ -428,12 +436,15 @@ There are no external state libraries — just React state, custom hooks, and pr
   → AudioContext.destination
 ```
 
-- **Hook API:** `useAmpConsole(audioRef, preset)` returns `{ engine: 'idle' | 'active' | 'unavailable', connect(), readFrequencies() }`.
+- **Persistent playback:** `src/audio/playerEngine.ts` owns a single lazily created `<audio crossOrigin="anonymous">` element and the Web Audio graph for the whole page, outside React. Routes can mount and unmount freely, and the music keeps playing.
+- **Store API:** `subscribe` / `getSnapshot` (for `useSyncExternalStore`), with a `PlayerSnapshot` of `{ track, isPlaying, currentTime, duration, presetId, engine: 'idle' | 'active' | 'unavailable', error }`. Actions: `playTrack(track)`, `togglePlay(track)`, `pause()`, `seek(seconds)`, `stop()`, `setPreset(id)`, and `readFrequencies()`. A `requestAnimationFrame` ticker updates `currentTime` while playing (only when it moved ≥ 1/30 s).
+- **Picking up playback:** `AudioPreviewPlayer` compares `player.track.id` with its own track. If they match (playing or paused), it shows and controls the ongoing playback — returning to `/tracks/:id` never restarts it. Pressing Play on another track's console replaces the loaded preview.
+- **Now Playing bar:** `MiniPlayer` lives outside `<Routes>` and shows whenever a preview is loaded, except on that track's own detail page (`shouldShowMiniPlayer(loadedId, pathname)`). A spacer keeps it from covering page content; ✕ calls `stop()`, which unloads the preview.
 - **Graceful fallback:** if `AudioContext` is missing or graph creation throws, `engine` becomes `'unavailable'`. The plain `<audio>` element keeps playing, the EQ buttons are disabled, and a note explains why.
-- **Lazy start:** the `AudioContext` and nodes are created on the first Play click (a user gesture, required by browser autoplay policies) and kept in refs. A media element can only be connected to one `MediaElementAudioSourceNode`, so the graph is built exactly once per element.
+- **Lazy start:** the `AudioContext` and nodes are created on the first Play click (a user gesture, required by browser autoplay policies). A media element can only be connected to one `MediaElementAudioSourceNode`, so the graph is built exactly once for the shared element and reused for every track.
 - **Live EQ:** switching presets calls `gain.setTargetAtTime(db, ctx.currentTime, 0.05)` on the three filters. The sound changes smoothly, and playback is never restarted.
 - **Visualizer:** while playing, a `requestAnimationFrame` loop reads `analyser.getByteFrequencyData()`, reduces it to N bars with `bucketFrequencies()`, and draws on a `<canvas>`. The loop is cancelled on pause, on end, and on unmount.
-- **Cleanup:** on unmount (or when `src` changes) the hook cancels the animation frame and closes the `AudioContext`.
+- **Cleanup:** the visualizer's animation frame is cancelled when its console unmounts or playback pauses; the engine's ticker stops on pause/end/stop. The shared `AudioContext` deliberately lives for the whole page, because closing it would cut the music off when the user changes route.
 - **CORS:** Apple serves previews with `Access-Control-Allow-Origin: *`, so `crossOrigin="anonymous"` keeps the analyser data from being silenced.
 - `EQ_PRESETS` (in `audioUtils.ts`): `Flat` 0/0/0 · `Metalcore Scoop` +5/−6/+4 · `Classic Tube Amp` +2/+4/−2 · `Bass Drop` +9/−2/−1 (bass/mid/treble dB).
 
@@ -537,7 +548,9 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 
 | Function / constant | Signature | Behavior | Test |
 | --- | --- | --- | --- |
-| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v2'` / 30 min | Versioned session cache key and lifetime | ✅ expansion |
+| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v3'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
+| `mergeCatalogTracks` | `(current, incoming) => Track[]` | Progressive merge: on-screen tracks keep their place, duplicate ids dropped | ✅ |
+| `getTrackIdFromPath` / `shouldShowMiniPlayer` (`audioUtils.ts`) | `(pathname) => number \| null` / `(loadedId, pathname) => boolean` | Mini-player visibility rule | ✅ |
 | `serializeCatalogCache` / `parseCatalogCache` | `(tracks, now) => string` / `(raw, now, ttl?) => Track[] \| null` | `null` when missing, corrupted, expired, from the future, or empty; tracks are re-validated | ✅ expansion |
 | `buildSearchUrl` / `buildLookupUrls` / `getCatalogRequestUrls` | `(term) => string` / `(ids) => string[]` / `() => string[]` | The request plan: 3 searches + lookups of ≤ 100 ids (≤ 5 requests) | ✅ expansion |
 

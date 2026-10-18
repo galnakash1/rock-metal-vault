@@ -1,18 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import { useAmpConsole } from '../hooks/useAmpConsole'
-import type { EqPresetId } from '../types/audio'
+import { useEffect, useRef } from 'react'
+import { readFrequencies, seek, setPreset, togglePlay } from '../audio/playerEngine'
+import { usePlayer } from '../hooks/usePlayer'
+import type { Track } from '../types/track'
 import { EQ_PRESETS, EQ_PRESET_IDS, bucketFrequencies } from '../utils/audioUtils'
 import { formatDuration } from '../utils/trackUtils'
 
 export interface AudioPreviewPlayerProps {
-  src: string
-  title: string
-  /** Called on every animation frame while playing, and on pause/seek/end. */
-  onProgress?: (seconds: number, isPlaying: boolean) => void
+  track: Track
 }
 
 const BAR_COUNT = 32
-const PREVIEW_SECONDS = 30 // iTunes previews are 30s; replaced by the real duration once known
+const PREVIEW_SECONDS = 30
 
 function drawBars(canvas: HTMLCanvasElement, levels: readonly number[]): void {
   const context = canvas.getContext('2d')
@@ -41,76 +39,40 @@ function drawBars(canvas: HTMLCanvasElement, levels: readonly number[]): void {
 
 const SILENCE: readonly number[] = Array.from({ length: BAR_COUNT }, () => 0)
 
-/** The Amp Console: preview player with live EQ presets and a frequency-bar visualizer. */
-function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement>(null)
+/**
+ * The Amp Console: a view onto the global preview player for one track. If this track is the
+ * one already playing (e.g. started here, then the user browsed away and came back), it shows
+ * and controls that ongoing playback — nothing restarts.
+ */
+function AudioPreviewPlayer({ track }: AudioPreviewPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const onProgressRef = useRef(onProgress)
+  const player = usePlayer()
 
-  const [presetId, setPresetId] = useState<EqPresetId>('flat')
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(PREVIEW_SECONDS)
-  const [playbackError, setPlaybackError] = useState<string | null>(null)
+  const isCurrent = player.track?.id === track.id
+  const isPlaying = isCurrent && player.isPlaying
+  const currentTime = isCurrent ? player.currentTime : 0
+  const duration = isCurrent ? player.duration : PREVIEW_SECONDS
+  const title = `${track.title} by ${track.artist}`
 
-  const { engine, connect, readFrequencies } = useAmpConsole(audioRef, EQ_PRESETS[presetId])
-
+  // Draw the analyser bars while this track plays; flat bars otherwise.
   useEffect(() => {
-    onProgressRef.current = onProgress
-  }, [onProgress])
-
-  // While playing: follow the playhead every frame and draw the analyser bars.
-  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
     if (!isPlaying) {
-      if (canvasRef.current) drawBars(canvasRef.current, SILENCE)
+      drawBars(canvas, SILENCE)
       return
     }
-
     let frameId = 0
     const tick = () => {
-      const audio = audioRef.current
-      if (audio) {
-        setCurrentTime(audio.currentTime)
-        onProgressRef.current?.(audio.currentTime, true)
-      }
       const data = readFrequencies()
-      if (canvasRef.current && data) drawBars(canvasRef.current, bucketFrequencies(data, BAR_COUNT))
+      drawBars(canvas, data ? bucketFrequencies(data, BAR_COUNT) : SILENCE)
       frameId = requestAnimationFrame(tick)
     }
     frameId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frameId)
-  }, [isPlaying, readFrequencies])
+  }, [isPlaying])
 
-  const reportPaused = (seconds: number) => {
-    setCurrentTime(seconds)
-    onProgressRef.current?.(seconds, false)
-  }
-
-  const handleTogglePlay = async () => {
-    const audio = audioRef.current
-    if (!audio) return
-    if (!audio.paused) {
-      audio.pause()
-      return
-    }
-    setPlaybackError(null)
-    await connect() // must run inside the click so browsers allow the AudioContext to start
-    try {
-      await audio.play()
-    } catch {
-      setPlaybackError('The preview could not start. Try again in a moment.')
-    }
-  }
-
-  const handleSeek = (seconds: number) => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.currentTime = seconds
-    if (audio.paused) reportPaused(seconds)
-    else setCurrentTime(seconds)
-  }
-
-  const activePreset = EQ_PRESETS[presetId]
+  const activePreset = EQ_PRESETS[player.presetId]
 
   return (
     <section className="amp-console" aria-label={`Amp Console — ${title}`}>
@@ -119,34 +81,8 @@ function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps)
         <span className={`amp-led amp-led--${isPlaying ? 'on' : 'off'}`} aria-hidden="true" />
       </header>
 
-      <audio
-        ref={audioRef}
-        src={src}
-        crossOrigin="anonymous"
-        preload="metadata"
-        onPlay={() => setIsPlaying(true)}
-        onPause={(event) => {
-          setIsPlaying(false)
-          reportPaused(event.currentTarget.currentTime)
-        }}
-        onEnded={(event) => {
-          setIsPlaying(false)
-          reportPaused(event.currentTarget.currentTime)
-        }}
-        onLoadedMetadata={(event) => {
-          const seconds = event.currentTarget.duration
-          if (Number.isFinite(seconds) && seconds > 0) setDuration(seconds)
-        }}
-        onError={() => setPlaybackError('This preview is unavailable right now.')}
-      />
-
-      <canvas
-        ref={canvasRef}
-        className="amp-visualizer"
-        aria-hidden="true"
-        data-engine={engine}
-      />
-      {engine === 'unavailable' && (
+      <canvas ref={canvasRef} className="amp-visualizer" aria-hidden="true" data-engine={player.engine} />
+      {player.engine === 'unavailable' && (
         <p className="amp-note">
           Web Audio isn't available here, so the preview plays without EQ or visualizer.
         </p>
@@ -156,7 +92,7 @@ function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps)
         <button
           type="button"
           className="amp-play"
-          onClick={() => void handleTogglePlay()}
+          onClick={() => void togglePlay(track)}
           aria-label={isPlaying ? `Pause ${title}` : `Play ${title}`}
         >
           {isPlaying ? '❚❚' : '▶'}
@@ -168,7 +104,8 @@ function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps)
           max={duration}
           step={0.1}
           value={Math.min(currentTime, duration)}
-          onChange={(event) => handleSeek(Number(event.target.value))}
+          disabled={!isCurrent}
+          onChange={(event) => seek(Number(event.target.value))}
           aria-label="Seek"
           aria-valuetext={`${formatDuration(currentTime * 1000)} of ${formatDuration(duration * 1000)}`}
         />
@@ -183,10 +120,10 @@ function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps)
             key={id}
             type="button"
             className="amp-preset"
-            aria-pressed={id === presetId}
-            disabled={engine === 'unavailable'}
+            aria-pressed={id === player.presetId}
+            disabled={player.engine === 'unavailable'}
             title={EQ_PRESETS[id].description}
-            onClick={() => setPresetId(id)}
+            onClick={() => setPreset(id)}
           >
             {EQ_PRESETS[id].label}
           </button>
@@ -198,9 +135,9 @@ function AudioPreviewPlayer({ src, title, onProgress }: AudioPreviewPlayerProps)
         {formatGain(activePreset.trebleDb)} dB).
       </p>
 
-      {playbackError && (
+      {isCurrent && player.error && (
         <p className="amp-error" role="alert">
-          {playbackError}
+          {player.error}
         </p>
       )}
     </section>

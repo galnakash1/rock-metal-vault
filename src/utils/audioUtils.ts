@@ -79,3 +79,19 @@ export function bucketFrequencies(
     return count === 0 ? 0 : sum / count / 255
   })
 }
+
+// ---------- Now Playing mini-player ----------
+
+/** The track id in a `/tracks/:id` path, or null on any other route. */
+export function getTrackIdFromPath(pathname: string): number | null {
+  const match = /^\/tracks\/(\d+)\/?$/.exec(pathname)
+  return match ? Number(match[1]) : null
+}
+
+/**
+ * The mini-player shows whenever a preview is loaded (playing or paused), except on that
+ * track's own detail page, where the full Amp Console already controls it.
+ */
+export function shouldShowMiniPlayer(loadedTrackId: number | null, pathname: string): boolean {
+  return loadedTrackId !== null && getTrackIdFromPath(pathname) !== loadedTrackId
+}

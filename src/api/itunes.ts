@@ -1,19 +1,27 @@
 import type { ITunesTrackRaw, Track } from '../types/track'
 import { SPOTLIGHT_ARTIST_IDS } from '../utils/artistMetadata'
-import { CATALOG_CACHE_KEY, parseCatalogCache, serializeCatalogCache } from '../utils/catalogCache'
+import {
+  CATALOG_CACHE_KEY,
+  mergeCatalogTracks,
+  parseCatalogCache,
+  serializeCatalogCache,
+} from '../utils/catalogCache'
+import { getBrowserStorage } from '../utils/setlistUtils'
 import { isVaultTrack, normalizeTracks, parseSearchResults } from '../utils/trackUtils'
 
 // ---------- Request plan ----------
-// Apple allows roughly 20 requests per minute, so one catalog load stays at 4 requests:
-// 3 broad searches for the mainstream, plus 1 Lookup call that returns a few songs from every
-// curated international band (Israel, Scandinavia, Japan, Brazil…) by artist id.
+// Apple allows roughly 20 requests per minute. A cold catalog load makes 7 requests (and the
+// 6-hour localStorage cache means most loads make none): 3 broad searches for the mainstream,
+// plus 4 parallel Lookup calls returning a few songs from every curated international band
+// (Israel, Scandinavia, Japan, Brazil…) by artist id. Uncached lookups slow down sharply with
+// the number of ids (61 ids: ~5–12 s; 4 × ~16 ids in parallel: ~2 s), hence the small chunks.
 
 const SEARCH_URL = 'https://itunes.apple.com/search'
 const LOOKUP_URL = 'https://itunes.apple.com/lookup'
 const SEARCH_TERMS = ['rock', 'metal', 'metalcore'] as const
 const RESULTS_PER_TERM = 50
 const SONGS_PER_SPOTLIGHT_ARTIST = 3 // the Lookup API applies `limit` per artist
-const MAX_IDS_PER_LOOKUP = 100 // keeps each URL short; today's ~60 ids fit in one call
+const MAX_IDS_PER_LOOKUP = 16 // small chunks keep each uncached lookup fast
 const REQUEST_TIMEOUT_MS = 15_000
 
 export function buildSearchUrl(term: string): string {
@@ -70,54 +78,31 @@ async function requestSongs(url: string): Promise<ITunesTrackRaw[]> {
   return parseSearchResults(data)
 }
 
-interface NetworkCatalog {
-  tracks: Track[]
-  complete: boolean // false when some requests failed but others returned tracks
+// ---------- Progressive batch, caches & request sharing ----------
+
+/** Receives the merged catalog so far, each time another request in the batch lands. */
+export type CatalogProgressListener = (tracksSoFar: Track[]) => void
+
+interface CatalogBatch {
+  tracks: Track[] // merged so far
+  listeners: Set<CatalogProgressListener>
+  promise: Promise<Track[]> // settles once every request has finished
 }
-
-/**
- * Runs every request in parallel. One failed request doesn't sink the catalog: the
- * successful ones are still used. It only throws when nothing at all came back.
- */
-async function loadCatalogFromNetwork(): Promise<NetworkCatalog> {
-  const settled = await Promise.allSettled(getCatalogRequestUrls().map(requestSongs))
-  const raws = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
-  const failure = settled.find((result) => result.status === 'rejected')
-
-  if (raws.length === 0 && failure) {
-    const reason: unknown = failure.reason
-    throw reason instanceof Error ? reason : new Error('Something went wrong while loading the Vault.')
-  }
-  return {
-    tracks: normalizeTracks(raws).filter(isVaultTrack),
-    complete: failure === undefined,
-  }
-}
-
-// ---------- Cache & request sharing ----------
 
 let memoryCache: Track[] | null = null
-let inFlight: Promise<Track[]> | null = null
+let batch: CatalogBatch | null = null
 
-function getSessionStorage(): Storage | null {
+function readPersistentCache(): Track[] | null {
   try {
-    return typeof window === 'undefined' ? null : window.sessionStorage
+    return parseCatalogCache(getBrowserStorage()?.getItem(CATALOG_CACHE_KEY) ?? null, Date.now())
   } catch {
     return null
   }
 }
 
-function readSessionCache(): Track[] | null {
+function writePersistentCache(tracks: Track[]): void {
   try {
-    return parseCatalogCache(getSessionStorage()?.getItem(CATALOG_CACHE_KEY) ?? null, Date.now())
-  } catch {
-    return null
-  }
-}
-
-function writeSessionCache(tracks: Track[]): void {
-  try {
-    getSessionStorage()?.setItem(CATALOG_CACHE_KEY, serializeCatalogCache(tracks, Date.now()))
+    getBrowserStorage()?.setItem(CATALOG_CACHE_KEY, serializeCatalogCache(tracks, Date.now()))
   } catch {
     // Storage full or blocked: the in-memory cache still covers this page load.
   }
@@ -126,10 +111,55 @@ function writeSessionCache(tracks: Track[]): void {
 function clearCaches(): void {
   memoryCache = null
   try {
-    getSessionStorage()?.removeItem(CATALOG_CACHE_KEY)
+    getBrowserStorage()?.removeItem(CATALOG_CACHE_KEY)
   } catch {
     // Nothing to clear.
   }
+}
+
+/**
+ * A fresh cached catalog (memory first, then localStorage), or null. Synchronous, so the very
+ * first render can show the catalog without a loading state.
+ */
+export function getCachedCatalog(): Track[] | null {
+  memoryCache ??= readPersistentCache()
+  return memoryCache
+}
+
+/**
+ * Starts every request in parallel and merges each response into the catalog the moment it
+ * lands (progressive rendering: the fastest search usually arrives in a few hundred ms).
+ * One failed request doesn't sink the catalog; it only rejects when nothing came back at all.
+ */
+function startBatch(): CatalogBatch {
+  const current: CatalogBatch = { tracks: [], listeners: new Set(), promise: Promise.resolve([]) }
+
+  const requests = getCatalogRequestUrls().map(async (url) => {
+    const incoming = normalizeTracks(await requestSongs(url)).filter(isVaultTrack)
+    const merged = mergeCatalogTracks(current.tracks, incoming)
+    if (merged.length === current.tracks.length) return
+    current.tracks = merged
+    for (const listener of current.listeners) listener(merged)
+  })
+
+  current.promise = Promise.allSettled(requests)
+    .then((results) => {
+      const failure = results.find((result) => result.status === 'rejected')
+      if (failure && current.tracks.length === 0) {
+        const reason: unknown = failure.reason
+        throw reason instanceof Error
+          ? reason
+          : new Error('Something went wrong while loading the Vault.')
+      }
+      memoryCache = current.tracks
+      // Partial results are used now but not persisted, so the next load tries again.
+      if (!failure) writePersistentCache(current.tracks)
+      return current.tracks
+    })
+    .finally(() => {
+      if (batch === current) batch = null
+    })
+  return current
 }
 
 /**
@@ -160,38 +190,44 @@ export interface FetchCatalogOptions {
   signal?: AbortSignal
   /** Skip both caches and fetch fresh data — used by the Retry button. */
   forceRefresh?: boolean
+  /** Called with the merged catalog so far whenever another network response arrives. */
+  onProgress?: CatalogProgressListener
 }
 
 /**
- * Loads the Vault catalog, at most once per browser session:
- * 1. in-memory cache → 2. sessionStorage cache (30 min) → 3. one shared network batch.
- * Concurrent callers (like React StrictMode's double mount) share the same in-flight batch.
+ * Loads the Vault catalog:
+ * 1. memory cache → 2. localStorage cache (6 h, shared across tabs) → 3. one shared network
+ *    batch that reports partial results through `onProgress` as each request lands.
+ * Concurrent callers (like React StrictMode's double mount) join the same in-flight batch.
  */
-export function fetchCatalog({ signal, forceRefresh = false }: FetchCatalogOptions = {}): Promise<Track[]> {
+export function fetchCatalog({
+  signal,
+  forceRefresh = false,
+  onProgress,
+}: FetchCatalogOptions = {}): Promise<Track[]> {
   if (forceRefresh) {
     clearCaches()
-    inFlight = null
+    batch = null
   } else {
-    if (memoryCache) return abortable(Promise.resolve(memoryCache), signal)
-    const cached = readSessionCache()
-    if (cached) {
-      memoryCache = cached
-      return abortable(Promise.resolve(cached), signal)
-    }
+    const cached = getCachedCatalog()
+    if (cached) return abortable(Promise.resolve(cached), signal)
   }
 
-  if (!inFlight) {
-    const request: Promise<Track[]> = loadCatalogFromNetwork()
-      .then(({ tracks, complete }) => {
-        memoryCache = tracks
-        // Partial results are used now but not cached, so the next session tries again.
-        if (complete) writeSessionCache(tracks)
-        return tracks
+  batch ??= startBatch()
+  const current = batch
+
+  if (onProgress && !signal?.aborted) {
+    current.listeners.add(onProgress)
+    const unsubscribe = () => current.listeners.delete(onProgress)
+    signal?.addEventListener('abort', unsubscribe, { once: true })
+    current.promise.then(unsubscribe, unsubscribe)
+    // A caller joining mid-batch (StrictMode's second mount) gets what has already arrived.
+    if (current.tracks.length > 0) {
+      const soFar = current.tracks
+      queueMicrotask(() => {
+        if (current.listeners.has(onProgress)) onProgress(soFar)
       })
-      .finally(() => {
-        if (inFlight === request) inFlight = null
-      })
-    inFlight = request
+    }
   }
-  return abortable(inFlight, signal)
+  return abortable(current.promise, signal)
 }

@@ -25,7 +25,8 @@ export const COUNTRY_FLAGS: Record<OriginCountry, string> = {
 
 /**
  * [artist as shown on iTunes, country the band formed in, main style, Apple artist id?]
- * The optional artist id (a) lets the catalog fetch the band directly with the Lookup API and
+ * The optional artist id (a) lets the catalog fetch the band directly with the Lookup API (see
+ * HEADLINER_ARTISTS for the in-depth tier) and
  * (b) stops namesakes (a hip-hop "Ghost", a dance "Avatar") from inheriting the band's metadata.
  */
 export const ARTIST_ENTRIES: ReadonlyArray<
@@ -34,31 +35,31 @@ export const ARTIST_ENTRIES: ReadonlyArray<
   // ---- Metalcore & post-hardcore ----
   ['A Day to Remember', 'United States', 'Metalcore'],
   ['All That Remains', 'United States', 'Metalcore'],
-  ['Architects', 'United Kingdom', 'Metalcore'],
+  ['Architects', 'United Kingdom', 'Metalcore', 182821355],
   ['As I Lay Dying', 'United States', 'Metalcore'],
   ['Asking Alexandria', 'United Kingdom', 'Metalcore'],
   ['Atreyu', 'United States', 'Metalcore'],
   ['Attack Attack!', 'United States', 'Metalcore'],
   ['August Burns Red', 'United States', 'Metalcore'],
-  ['Bad Omens', 'United States', 'Metalcore'],
+  ['Bad Omens', 'United States', 'Metalcore', 467610583],
   ['Beartooth', 'United States', 'Metalcore'],
   ['blessthefall', 'United States', 'Metalcore'],
-  ['Bring Me The Horizon', 'United Kingdom', 'Metalcore'],
-  ['Bullet For My Valentine', 'United Kingdom', 'Metalcore'],
+  ['Bring Me The Horizon', 'United Kingdom', 'Metalcore', 121043936],
+  ['Bullet For My Valentine', 'United Kingdom', 'Metalcore', 50077521],
   ['I Prevail', 'United States', 'Metalcore'],
   ['Ice Nine Kills', 'United States', 'Metalcore'],
-  ['Killswitch Engage', 'United States', 'Metalcore'],
+  ['Killswitch Engage', 'United States', 'Metalcore', 14268438],
   ['LANDMVRKS', 'France', 'Metalcore'],
   ['Make Them Suffer', 'Australia', 'Metalcore'],
   ['Memphis May Fire', 'United States', 'Metalcore'],
   ['Motionless In White', 'United States', 'Metalcore'],
   ['Northlane', 'Australia', 'Metalcore'],
   ['Of Mice & Men', 'United States', 'Metalcore'],
-  ['Parkway Drive', 'Australia', 'Metalcore'],
+  ['Parkway Drive', 'Australia', 'Metalcore', 166667737],
   ['Polaris', 'Australia', 'Metalcore'],
   ['The Devil Wears Prada', 'United States', 'Metalcore'],
   ['The Amity Affliction', 'Australia', 'Metalcore'],
-  ['Trivium', 'United States', 'Metalcore'],
+  ['Trivium', 'United States', 'Metalcore', 47123955],
   ['Underoath', 'United States', 'Metalcore'],
   ['Wage War', 'United States', 'Metalcore'],
   ['We Came As Romans', 'United States', 'Metalcore'],
@@ -67,19 +68,19 @@ export const ARTIST_ENTRIES: ReadonlyArray<
   ['Falling In Reverse', 'United States', 'Post-Hardcore'],
 
   // ---- Heavy, thrash, groove & extreme metal ----
-  ['Avenged Sevenfold', 'United States', 'Heavy Metal'],
-  ['Black Sabbath', 'United Kingdom', 'Heavy Metal'],
+  ['Avenged Sevenfold', 'United States', 'Heavy Metal', 6766228],
+  ['Black Sabbath', 'United Kingdom', 'Heavy Metal', 165907],
   ['Five Finger Death Punch', 'United States', 'Heavy Metal'],
-  ['Iron Maiden', 'United Kingdom', 'Heavy Metal'],
-  ['Judas Priest', 'United Kingdom', 'Heavy Metal'],
-  ['Motörhead', 'United Kingdom', 'Heavy Metal'],
-  ['Ozzy Osbourne', 'United Kingdom', 'Heavy Metal'],
+  ['Iron Maiden', 'United Kingdom', 'Heavy Metal', 546381],
+  ['Judas Priest', 'United Kingdom', 'Heavy Metal', 154707],
+  ['Motörhead', 'United Kingdom', 'Heavy Metal', 539605],
+  ['Ozzy Osbourne', 'United Kingdom', 'Heavy Metal', 886834],
   ['Anthrax', 'United States', 'Thrash Metal'],
-  ['Megadeth', 'United States', 'Thrash Metal'],
-  ['Metallica', 'United States', 'Thrash Metal'],
-  ['Slayer', 'United States', 'Thrash Metal'],
-  ['Lamb of God', 'United States', 'Groove Metal'],
-  ['Pantera', 'United States', 'Groove Metal'],
+  ['Megadeth', 'United States', 'Thrash Metal', 488289],
+  ['Metallica', 'United States', 'Thrash Metal', 3996865],
+  ['Slayer', 'United States', 'Thrash Metal', 414425],
+  ['Lamb of God', 'United States', 'Groove Metal', 18758452],
+  ['Pantera', 'United States', 'Groove Metal', 155209],
   ['Dream Theater', 'United States', 'Progressive Metal'],
   ['Mastodon', 'United States', 'Progressive Metal'],
   ['Tool', 'United States', 'Progressive Metal'],
@@ -87,29 +88,29 @@ export const ARTIST_ENTRIES: ReadonlyArray<
 
   // ---- Alternative, nu & industrial metal ----
   ['Breaking Benjamin', 'United States', 'Alternative Metal'],
-  ['Deftones', 'United States', 'Alternative Metal'],
-  ['Disturbed', 'United States', 'Alternative Metal'],
+  ['Deftones', 'United States', 'Alternative Metal', 1092903],
+  ['Disturbed', 'United States', 'Alternative Metal', 156807],
   ['Evanescence', 'United States', 'Alternative Metal'],
   ['In This Moment', 'United States', 'Alternative Metal'],
   ['Sleep Token', 'United Kingdom', 'Alternative Metal'],
-  ['System Of A Down', 'United States', 'Alternative Metal'],
-  ['Korn', 'United States', 'Nu Metal'],
-  ['Linkin Park', 'United States', 'Nu Metal'],
+  ['System Of A Down', 'United States', 'Alternative Metal', 462715],
+  ['Korn', 'United States', 'Nu Metal', 466532],
+  ['Linkin Park', 'United States', 'Nu Metal', 148662],
   ['Papa Roach', 'United States', 'Nu Metal'],
-  ['Slipknot', 'United States', 'Nu Metal'],
+  ['Slipknot', 'United States', 'Nu Metal', 6907568],
   ['Rage Against the Machine', 'United States', 'Rap Metal'],
   ['Rob Zombie', 'United States', 'Industrial Metal'],
 
   // ---- Hard rock ----
-  ['AC/DC', 'Australia', 'Hard Rock'],
+  ['AC/DC', 'Australia', 'Hard Rock', 5040714],
   ['Accept', 'Germany', 'Hard Rock'],
   ['Aerosmith', 'United States', 'Hard Rock'],
   ['Alter Bridge', 'United States', 'Hard Rock'],
   ['Audioslave', 'United States', 'Hard Rock'],
   ['Bon Jovi', 'United States', 'Hard Rock'],
-  ['Deep Purple', 'United Kingdom', 'Hard Rock'],
+  ['Deep Purple', 'United Kingdom', 'Hard Rock', 135532],
   ['Def Leppard', 'United Kingdom', 'Hard Rock'],
-  ["Guns N' Roses", 'United States', 'Hard Rock'],
+  ["Guns N' Roses", 'United States', 'Hard Rock', 106621],
   ['Halestorm', 'United States', 'Hard Rock'],
   ['HARDY', 'United States', 'Hard Rock'],
   ['Kid Rock', 'United States', 'Hard Rock'],
@@ -122,22 +123,22 @@ export const ARTIST_ENTRIES: ReadonlyArray<
 
   // ---- Classic & progressive rock ----
   ['Eagles', 'United States', 'Classic Rock'],
-  ['Led Zeppelin', 'United Kingdom', 'Classic Rock'],
+  ['Led Zeppelin', 'United Kingdom', 'Classic Rock', 994656],
   ['Queen', 'United Kingdom', 'Classic Rock'],
   ['The Rolling Stones', 'United Kingdom', 'Classic Rock'],
   ['Pink Floyd', 'United Kingdom', 'Progressive Rock'],
   ['Procol Harum', 'United Kingdom', 'Progressive Rock'],
 
   // ---- Grunge, alternative & punk ----
-  ['Alice In Chains', 'United States', 'Grunge'],
-  ['Nirvana', 'United States', 'Grunge'],
+  ['Alice In Chains', 'United States', 'Grunge', 462221],
+  ['Nirvana', 'United States', 'Grunge', 112018],
   ['Pearl Jam', 'United States', 'Grunge'],
-  ['Soundgarden', 'United States', 'Grunge'],
+  ['Soundgarden', 'United States', 'Grunge', 133036],
   ['Stone Temple Pilots', 'United States', 'Grunge'],
   ['3 Doors Down', 'United States', 'Post-Grunge'],
   ['Nickelback', 'Canada', 'Post-Grunge'],
   ['Three Days Grace', 'Canada', 'Post-Grunge'],
-  ['Foo Fighters', 'United States', 'Alternative Rock'],
+  ['Foo Fighters', 'United States', 'Alternative Rock', 6906197],
   ['Muse', 'United Kingdom', 'Alternative Rock'],
   ['The Smashing Pumpkins', 'United States', 'Alternative Rock'],
   ['Red Hot Chili Peppers', 'United States', 'Funk Rock'],
@@ -255,10 +256,33 @@ const ARTIST_BY_ITUNES_ID: ReadonlyMap<number, CuratedArtist> = new Map(
   ),
 )
 
-/** Apple artist ids of the curated bands the catalog fetches directly (Lookup API). */
-export const SPOTLIGHT_ARTIST_IDS: readonly number[] = ARTIST_ENTRIES.flatMap(
-  ([, , , itunesArtistId]) => (itunesArtistId === undefined ? [] : [itunesArtistId]),
-)
+/**
+ * Flagship rock, metal and metalcore bands. The catalog fetches their top songs in depth
+ * (up to 10 studio tracks each), while other curated bands get a smaller spotlight sample.
+ */
+export const HEADLINER_ARTISTS: readonly string[] = [
+  'Metallica', 'Iron Maiden', 'Black Sabbath', 'Ozzy Osbourne', 'Megadeth', 'Slayer', 'Pantera',
+  'Judas Priest', 'Motörhead', 'Slipknot', 'System Of A Down', 'Korn', 'Linkin Park', 'Deftones',
+  'Avenged Sevenfold', 'Disturbed', 'Rammstein', 'Gojira', 'Opeth', 'Ghost', 'Bad Omens',
+  'Bring Me The Horizon', 'Architects', 'Parkway Drive', 'Spiritbox', 'Trivium',
+  'Killswitch Engage', 'Lamb of God', 'Bullet For My Valentine', 'AC/DC', "Guns N' Roses",
+  'Led Zeppelin', 'Deep Purple', 'Nirvana', 'Alice In Chains', 'Soundgarden', 'Foo Fighters',
+]
+
+const HEADLINER_KEYS: ReadonlySet<string> = new Set(HEADLINER_ARTISTS.map(normalizeArtistKey))
+
+const idsWhere = (isHeadliner: boolean): number[] =>
+  ARTIST_ENTRIES.flatMap(([name, , , itunesArtistId]) =>
+    itunesArtistId !== undefined && HEADLINER_KEYS.has(normalizeArtistKey(name)) === isHeadliner
+      ? [itunesArtistId]
+      : [],
+  )
+
+/** Apple artist ids of the flagship bands (fetched in depth with the Lookup API). */
+export const HEADLINER_ARTIST_IDS: readonly number[] = idsWhere(true)
+
+/** Apple artist ids of the other curated bands — mostly the international scene (smaller sample). */
+export const SPOTLIGHT_ARTIST_IDS: readonly number[] = idsWhere(false)
 
 // Splits "Bad Omens, Let's Eat Grandma & Chief" / "X feat. Y" into the lead artist.
 const COLLABORATION_SEPARATOR = /\s*(?:,|&|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i

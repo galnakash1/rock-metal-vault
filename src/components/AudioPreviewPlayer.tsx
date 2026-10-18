@@ -1,8 +1,13 @@
 import { useEffect, useRef } from 'react'
-import { readFrequencies, seek, setPreset, togglePlay } from '../audio/playerEngine'
+import { nextTrack, previousTrack, readFrequencies, seek, setPreset, togglePlay } from '../audio/playerEngine'
 import { usePlayer } from '../hooks/usePlayer'
 import type { Track } from '../types/track'
-import { EQ_PRESETS, EQ_PRESET_IDS, bucketFrequencies } from '../utils/audioUtils'
+import {
+  EQ_PRESETS,
+  EQ_PRESET_IDS,
+  bucketFrequencies,
+  formatQueuePosition,
+} from '../utils/audioUtils'
 import { formatDuration } from '../utils/trackUtils'
 
 export interface AudioPreviewPlayerProps {
@@ -53,6 +58,11 @@ function AudioPreviewPlayer({ track }: AudioPreviewPlayerProps) {
   const currentTime = isCurrent ? player.currentTime : 0
   const duration = isCurrent ? player.duration : PREVIEW_SECONDS
   const title = `${track.title} by ${track.artist}`
+  const queuePosition =
+    isCurrent && player.queue.length > 1 && player.queueIndex !== null
+      ? formatQueuePosition(player.queueLabel ?? 'Queue', player.queueIndex, player.queue.length)
+      : null
+  const isLastInQueue = player.queueIndex !== null && player.queueIndex >= player.queue.length - 1
 
   // Draw the analyser bars while this track plays; flat bars otherwise.
   useEffect(() => {
@@ -113,6 +123,29 @@ function AudioPreviewPlayer({ track }: AudioPreviewPlayerProps) {
           {formatDuration(currentTime * 1000)} / {formatDuration(duration * 1000)}
         </span>
       </div>
+
+      {queuePosition && (
+        <div className="amp-queue" role="group" aria-label="Queue">
+          <button
+            type="button"
+            className="amp-queue-button"
+            onClick={() => void previousTrack()}
+            aria-label="Previous track"
+          >
+            ⏮
+          </button>
+          <span className="amp-queue-position">{queuePosition}</span>
+          <button
+            type="button"
+            className="amp-queue-button"
+            onClick={() => void nextTrack()}
+            disabled={isLastInQueue}
+            aria-label="Next track"
+          >
+            ⏭
+          </button>
+        </div>
+      )}
 
       <div className="amp-presets" role="group" aria-label="EQ presets">
         {EQ_PRESET_IDS.map((id) => (

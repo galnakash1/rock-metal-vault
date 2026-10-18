@@ -1,12 +1,14 @@
 import type { Track } from '../types/track'
-import { dedupeTracks } from './trackUtils'
+import { getLeadArtistKey } from './artistMetadata'
+import { normalizeTitleKey } from './riffTabs'
 import { reviveStoredTracks } from './setlistUtils'
+import { dedupeTracks } from './trackUtils'
 
 /**
  * localStorage key for the normalized catalog (shared by every tab, survives reloads).
  * Bump the version whenever the query strategy or Track shape changes, to drop old caches.
  */
-export const CATALOG_CACHE_KEY = 'rmv:catalog:v3'
+export const CATALOG_CACHE_KEY = 'rmv:catalog:v4' // v4: studio-only, headliner tier
 export const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000 // 6 hours
 
 interface CatalogCacheEntry {
@@ -45,10 +47,29 @@ export function parseCatalogCache(
   return revived.length > 0 ? revived : null
 }
 
+/** Same song, same lead artist — e.g. the album and the "Greatest Hits" release of one recording. */
+const songKey = (track: Pick<Track, 'artist' | 'title'>): string =>
+  `${getLeadArtistKey(track.artist)}|${normalizeTitleKey(track.title)}`
+
+/**
+ * Keeps the first copy of each song: Apple often lists one recording on several albums
+ * ("Smells Like Teen Spirit" on Nevermind and on a compilation) with different track ids.
+ */
+export function dedupeSongs(tracks: readonly Track[]): Track[] {
+  const seen = new Set<string>()
+  return tracks.filter((track) => {
+    const key = songKey(track)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 /**
  * Merges a newly arrived batch response into the catalog shown so far (progressive loading):
- * tracks already on screen keep their place, new ones are appended, duplicate ids are dropped.
+ * tracks already on screen keep their place, new ones are appended, and duplicates (same id or
+ * same song) are dropped.
  */
 export function mergeCatalogTracks(current: readonly Track[], incoming: readonly Track[]): Track[] {
-  return dedupeTracks([...current, ...incoming])
+  return dedupeSongs(dedupeTracks([...current, ...incoming]))
 }

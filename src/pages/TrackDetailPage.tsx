@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import AppleMusicLink from '../components/AppleMusicLink'
 import AudioPreviewPlayer from '../components/AudioPreviewPlayer'
 import RiffTabPanel from '../components/RiffTabPanel'
 import SetlistButton from '../components/SetlistButton'
@@ -116,8 +117,9 @@ function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewP
             )}
           </h1>
           <p className="track-artist">{track.artist}</p>
-          <div>
+          <div className="track-detail-actions">
             <SetlistButton trackTitle={track.title} inSetlist={inSetlist} onToggle={onToggleSetlist} />
+            <AppleMusicLink track={track} />
           </div>
 
           <dl className="track-facts">

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import AppleMusicLink from '../components/AppleMusicLink'
 import FestivalPoster from '../components/FestivalPoster'
+import { LineupPlayButton, RowPlayButton } from '../components/LineupPlayback'
 import StatusMessage from '../components/StatusMessage'
 import type { PosterTheme, Track } from '../types/track'
 import { POSTER_THEMES, buildFestivalLineup } from '../utils/setlistUtils'
@@ -69,14 +71,17 @@ function SetlistPage({ setlist, onRemove, onClear }: SetlistPageProps) {
               <h2 id="running-order-title">Running order</h2>
               <p className="page-summary">
                 {lineup.trackCount} {lineup.trackCount === 1 ? 'track' : 'tracks'} ·{' '}
-                {formatDuration(lineup.totalRuntimeMs)}
+                {formatDuration(lineup.totalRuntimeMs)} · 30-second previews, played in order
               </p>
             </div>
+
+            <LineupPlayButton setlist={setlist} />
 
             <ol className="running-order-list">
               {setlist.map((track, index) => (
                 <li key={track.id} className="running-order-item">
                   <span className="running-order-index">{index + 1}</span>
+                  <RowPlayButton setlist={setlist} index={index} />
                   <img
                     className="running-order-art"
                     src={track.artworkUrl}
@@ -93,6 +98,7 @@ function SetlistPage({ setlist, onRemove, onClear }: SetlistPageProps) {
                       {track.artist} · <span aria-hidden="true">{track.originFlag}</span>{' '}
                       {track.subgenre}
                     </span>
+                    <AppleMusicLink track={track} variant="compact" />
                   </div>
                   <span className="running-order-duration">{formatDuration(track.durationMs)}</span>
                   <button

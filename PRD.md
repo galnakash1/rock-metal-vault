@@ -56,7 +56,12 @@ Supporting the features above are three **music-data enrichments**, which add da
 https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
-- The catalog is built from **7 requests on a cold load**: three broad searches (`rock`, `metal`, `metalcore`) for the mainstream, plus 4 parallel **Lookup API** calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=3`, ~16 artist ids each) that fetch 3 songs from each of ~60 curated international bands by Apple artist id (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada). Results are merged and de-duplicated by `trackId` (about 290 tracks, 19 countries, 30+ styles).
+- The catalog is built from **11 requests on a cold load**:
+  - 3 broad searches (`rock`, `metal`, `metalcore`) for the mainstream;
+  - a **headliner tier**: 4 Lookup API calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=10`) fetching the top 10 songs of 37 flagship bands (Metallica, Iron Maiden, Black Sabbath, Slipknot, Bring Me The Horizon, Gojira, AC/DC, Nirvana…);
+  - a **spotlight tier**: 4 more lookups (`limit=5`) covering 56 other curated bands, mostly international (Israel, Sweden, Finland, Norway, Denmark, Iceland, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan…).
+  Results are merged and de-duplicated by `trackId` and by song, giving about 660 studio tracks from 19 countries and 30+ styles.
+- **Studio recordings only:** live versions, commentary, karaoke, interview and unplugged releases never enter the catalog.
 - **Fast loading:** tracks render as soon as the fastest request lands (progressive rendering), and later responses merge in. The finished catalog is cached in memory and in **`localStorage`** for 6 hours, so reloads and new tabs show it instantly with no requests.
 - **Rate-limit protection:** concurrent loads (e.g. React StrictMode's double mount) share one in-flight batch, and cached loads make no requests. **Retry** bypasses the cache. If some requests fail, the rest still load the catalog.
 - Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band — whatever Apple files the album under (Orphaned Land, Wardruna and KALEO may be "World", "Worldwide", or "Alternative"). iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
@@ -110,7 +115,15 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
   - **Main Stage (underbill):** every other act, in smaller type below.
   - Each act shows its **origin flag + country** and **style**.
   - **Summary stats:** total tracks, bands, and total festival runtime (`h:mm:ss` / `mm:ss`).
-  - **Poster theme switcher:** `Foggy Woodland` (misty greens), `Blood Moon` (black sky, crimson moon), and `Vintage Tour` (cream paper and ink). The poster restyles instantly.
+  - **Poster theme switcher — 6 designs:**
+    - `Hellfire Forge`: molten embers, a charred iron frame, fiery lettering.
+    - `Catacomb Black`: gothic silver blackletter on pitch black, ornate rules.
+    - `Thrash Pit '86`: hazard yellow, crimson and black 80s flyer.
+    - `Foggy Woodland`: Nordic forest mist, pines, cold moonlight.
+    - `Blood Moon`: a crimson eclipse, sharp metalcore styling.
+    - `Vintage '70s Arena`: distressed parchment tour bill.
+    The poster restyles instantly.
+- **Play the lineup:** a **▶ Play Full Festival Lineup** button queues the running order and plays the previews in order, advancing automatically. It pauses and resumes the lineup when it's already playing. Every running-order row has its own play/pause button and a **"Full Song on Apple Music ↗"** link (previews are 30 seconds). While a lineup plays, the mini-player and the Amp Console show ⏮ / ⏭ and the queue position ("Setlist 2 / 7").
 - **Running order:** the saved tracks in the order they were added, with artwork, formatted durations, links to `/tracks/:id`, and a **Remove** button each. A **Clear Lineup** button (with a confirmation step) empties it.
 - An empty state ("Your lineup is empty") links back to the catalog.
 - **Add to Setlist** buttons on every track card and on the detail page toggle a track in and out of the setlist without navigating away. Saved tracks open on `/tracks/:id` even when the catalog is still loading or the API is down.
@@ -163,7 +176,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint`, and `npm test` all pass with zero errors.
-- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **114 tests in 5 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **129 tests in 5 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 

@@ -184,3 +184,16 @@
   3. Align `PRD.md` and `docs/architecture.md` with the shipped code (curated artist count, fixture size, request plan, UI labels "Retry" and "Clear Lineup", the test count, and documentation links).
   4. Audit: `npm run build`, `npm run lint --max-warnings 0`, and `npm test`. Then walk every route and the main flows in headless Chrome (dev server with StrictMode, and the production build), recording console messages, exceptions, browser log entries, and failed requests.
 - **Done when:** build, lint, and the 114 tests pass with zero errors or warnings; there is no `any`; both browser runs report zero console, browser, or network issues across `/`, `/tracks/:id`, `/setlist`, `/arena`, the 404 page, and an unknown track id; and the README lets a new developer run the app and its tests from scratch.
+
+---
+
+## Upgrade (after Task 9) — Studio-only catalog, playable lineup, heavier look, 6 poster themes
+
+- [x] **Goal:** Make the app feel heavier and more authentic: more iconic studio tracks, no live recordings, a playable festival lineup, and bolder visuals.
+- **Files:** `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/catalogCache.ts`, `src/api/itunes.ts`, `src/audio/playerEngine.ts`, `src/utils/audioUtils.ts`, `src/utils/setlistUtils.ts`, `src/types/track.ts`, `src/components/{MiniPlayer,AudioPreviewPlayer,LineupPlayback,AppleMusicLink}.tsx`, `src/pages/{SetlistPage,TrackDetailPage}.tsx`, `index.html`, `src/index.css`, `src/App.css` (+ tests)
+- **Steps:**
+  1. Add `isStudioRecording` (rejects live, commentary, karaoke, interview, unplugged) to normalization; add `dedupeSongs`; add a headliner tier of 37 flagship bands (Apple artist ids, top 10 songs each) next to the 5-song spotlight tier; bump the cache key to `rmv:catalog:v4`.
+  2. Add a queue to the player engine (`playQueue`, auto-advance, `nextTrack` / `previousTrack`, queue position) with the pure `getQueueStep`. Add "▶ Play Full Festival Lineup", per-row play buttons, ⏮ / ⏭ with "Setlist 2 / 7" in the mini-player and Amp Console, and "Full Song on Apple Music ↗" links.
+  3. Heavier stage aesthetic: a fixed amp-grille / carbon / crimson-smoke background with a vignette, chrome titles, bevelled buttons, and corner brackets.
+  4. Six poster themes: Hellfire Forge, Catacomb Black, Thrash Pit '86, Foggy Woodland, Blood Moon, Vintage '70s Arena.
+- **Done when:** the live catalog loads about 660 studio tracks with zero live versions or duplicate songs; the lineup plays, advances with ⏭ and at the end of each preview, and shows its queue position; all six themes render at 375px with no overflow; the console stays clean; and `npm test` (129 tests), `npm run build`, and `npm run lint` pass with zero `any`.

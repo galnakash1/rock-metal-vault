@@ -19,7 +19,16 @@ import {
   summarizeSet,
 } from './arenaUtils'
 import type { ITunesTrackRaw, RoundOutcome, RoundResult, Subgenre, Track, TrackFilters } from '../types/track'
-import { ARTIST_ENTRIES, COUNTRY_FLAGS, SPOTLIGHT_ARTIST_IDS, getArtistMetadata, normalizeArtistKey } from './artistMetadata'
+import {
+  ARTIST_ENTRIES,
+  COUNTRY_FLAGS,
+  HEADLINER_ARTISTS,
+  HEADLINER_ARTIST_IDS,
+  SPOTLIGHT_ARTIST_IDS,
+  findArtistMetadata,
+  getArtistMetadata,
+  normalizeArtistKey,
+} from './artistMetadata'
 import {
   GUITAR_STRINGS,
   RIFF_PROFILES,
@@ -42,6 +51,7 @@ import {
   getUniqueCountries,
   getUniqueSubgenres,
   hasActiveFilters,
+  isStudioRecording,
   isVaultTrack,
   matchesMood,
   normalizeTrack,
@@ -230,6 +240,69 @@ describe('normalizeTracks & dedupeTracks', () => {
   })
 })
 
+// ---------- Studio-only catalog ----------
+
+describe('isStudioRecording (no live tracks)', () => {
+  it('rejects live versions in the track title or the album name', () => {
+    const live: Array<[string, string?]> = [
+      ['Master of Puppets (Live)'],
+      ['Fear of the Dark (Live at Rock in Rio)'],
+      ['Paranoid [Live]'],
+      ['Enter Sandman - Live'],
+      ['Enter Sandman – Live from Seattle'],
+      ['Pisces (Live Session)'],
+      ['Smoke On the Water', 'Made In Japan (The Remastered Edition) [Live]'],
+      ['The Trooper', 'Live After Death (Live at Long Beach Arena)'],
+      ['Du Hast', 'Live aus Berlin (Live)'],
+      ['War Pigs', 'Live at Last'],
+      ['One', 'Live in Moscow'],
+      ['Ace of Spades', 'Live From the Hammersmith Odeon'],
+    ]
+    for (const [title, album] of live) expect(isStudioRecording(title, album)).toBe(false)
+  })
+
+  it('rejects commentary, karaoke, interview and unplugged releases', () => {
+    expect(isStudioRecording('Track Commentary')).toBe(false)
+    expect(isStudioRecording('Fade to Black (Commentary)')).toBe(false)
+    expect(isStudioRecording('Iron Man (Karaoke Version)')).toBe(false)
+    expect(isStudioRecording('Band Interview 2004')).toBe(false)
+    expect(isStudioRecording('About a Girl', 'MTV Unplugged in New York')).toBe(false)
+  })
+
+  it('keeps studio tracks whose names merely contain the word "live"', () => {
+    const studio = [
+      'Live and Let Die',
+      'To Live Is to Die',
+      'Live Forever',
+      'Live Wire',
+      'Alive',
+      "Livin' on a Prayer",
+      'The Trooper (2015 Remaster)',
+      'Master of Puppets (Remastered)',
+    ]
+    for (const title of studio) expect(isStudioRecording(title, 'Studio Album')).toBe(true)
+  })
+
+  it('drops live recordings during normalization', () => {
+    const raw = rawByName('Paranoid')
+    expect(normalizeTrack({ ...raw, trackName: 'Paranoid (Live)' })).toBeNull()
+    expect(normalizeTrack({ ...raw, collectionName: 'Reunion (Live)' })).toBeNull()
+    expect(normalizeTrack(raw)?.title).toBe('Paranoid')
+    // The fixture is studio-only.
+    expect(tracks.every((track) => isStudioRecording(track.title, track.album))).toBe(true)
+  })
+})
+
+describe('headliner tier', () => {
+  it('fetches every flagship band in depth by Apple artist id', () => {
+    expect(HEADLINER_ARTISTS.length).toBe(37)
+    expect(HEADLINER_ARTIST_IDS).toHaveLength(HEADLINER_ARTISTS.length)
+    for (const name of HEADLINER_ARTISTS) expect(findArtistMetadata(name)).not.toBeNull()
+    expect(HEADLINER_ARTIST_IDS).toContain(3996865) // Metallica
+    expect(HEADLINER_ARTIST_IDS).toContain(112018) // Nirvana (Seattle, not a namesake)
+  })
+})
+
 // ---------- Band origin & subgenre enrichment ----------
 
 describe('band origin & subgenre enrichment', () => {
@@ -370,8 +443,9 @@ describe('international band enrichment', () => {
     const keys = ARTIST_ENTRIES.map(([name]) => normalizeArtistKey(name))
     expect(new Set(keys).size).toBe(keys.length)
     for (const [, country] of ARTIST_ENTRIES) expect(COUNTRY_FLAGS[country]).toBeTruthy()
-    expect(new Set(SPOTLIGHT_ARTIST_IDS).size).toBe(SPOTLIGHT_ARTIST_IDS.length)
-    expect(SPOTLIGHT_ARTIST_IDS.length).toBeGreaterThanOrEqual(60)
+    const allIds = [...HEADLINER_ARTIST_IDS, ...SPOTLIGHT_ARTIST_IDS]
+    expect(new Set(allIds).size).toBe(allIds.length) // unique, and no band in both tiers
+    expect(allIds.length).toBeGreaterThanOrEqual(90)
     const countries = new Set(ARTIST_ENTRIES.map(([, country]) => country))
     expect(countries.size).toBeGreaterThanOrEqual(19)
   })

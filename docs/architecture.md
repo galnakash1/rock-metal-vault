@@ -22,7 +22,7 @@ src/
 │   └── mockTracks.json       # 10 real iTunes records (raw shape) — the deterministic test fixture
 │
 ├── api/
-│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 4 lookups,
+│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 8 tiered lookups,
 │   │                         #   progressive merge, memory + localStorage cache
 │   └── itunes.test.ts        # request-plan tests (no network)
 │
@@ -51,7 +51,9 @@ src/
 │   ├── FilterBar.tsx
 │   ├── MoodCapsules.tsx      # Signature 1
 │   ├── AudioPreviewPlayer.tsx# Signature 2 — the Amp Console (a view onto the global player)
-│   ├── MiniPlayer.tsx        # Now Playing bar, shown on every route but the playing track's page
+│   ├── MiniPlayer.tsx        # Now Playing bar (+ ⏮/⏭ and "Setlist 2 / 7" while a queue plays)
+│   ├── LineupPlayback.tsx    # "Play Full Festival Lineup" + per-row play buttons (setlist queue)
+│   ├── AppleMusicLink.tsx    # "Full Song on Apple Music ↗" (previews are 30 s)
 │   ├── RiffTabPanel.tsx      # Guitar Riff Tab panel (detail page)
 │   ├── StatusMessage.tsx
 │   ├── SetlistButton.tsx
@@ -237,7 +239,9 @@ export interface MoodCapsule {
 }
 
 // ---------- Signature 3: Festival Poster ----------
-export type PosterTheme = 'foggy-woodland' | 'blood-moon' | 'vintage-tour'
+export type PosterTheme =
+  | 'hellfire-forge' | 'catacomb-black' | 'thrash-pit-86'
+  | 'foggy-woodland' | 'blood-moon' | 'vintage-70s-arena'
 
 export interface PosterThemeOption {
   id: PosterTheme
@@ -424,11 +428,15 @@ There are no external state libraries — just React state, custom hooks, and pr
 ### Catalog fetch — `useEffect` in `App` + `fetchCatalog()`
 
 - `App` calls `fetchCatalog({ signal, forceRefresh: requestId > 0 })` inside `useEffect`.
-- **Request plan (7 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each) plus 4 parallel **Lookup API** calls covering every `SPOTLIGHT_ARTIST_IDS` id (`lookup?id=…&entity=song&limit=3`; Apple applies the limit per artist). Ids are chunked at **16 per lookup**: uncached lookups slow down sharply with more ids (61 ids in one call took 5–12 s; 4 × ~16 in parallel take ~2 s). Each request has a 15 s timeout (`AbortSignal.timeout`), and HTTP 429 gets a rate-limit message.
+- **Request plan (11 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each) plus two tiers of **Lookup API** calls (Apple applies `limit` per artist), set in `LOOKUP_TIERS`:
+  - **Headliner tier:** `HEADLINER_ARTIST_IDS`, the 37 flagship bands in `HEADLINER_ARTISTS`. Top 10 songs each, chunked at 12 ids, giving 4 lookups.
+  - **Spotlight tier:** `SPOTLIGHT_ARTIST_IDS`, the other 56 curated bands. 5 songs each, chunked at 16 ids, giving 4 lookups.
+  Small chunks keep uncached lookups at about 2–5 s (61 ids in one call took 5–12 s). Each request has a 15 s timeout (`AbortSignal.timeout`), and HTTP 429 gets a rate-limit message.
 - **Progressive rendering:** every request merges its tracks into the shared batch the moment it lands (`mergeCatalogTracks` keeps tracks on screen in place and drops duplicate ids), and `onProgress(tracksSoFar)` lets `App` render right away. The catalog appears after the fastest search (~0.8 s cold in a production build), and the rest merge in with a "Loading more bands…" note (full catalog ~1.8 s).
 - `Promise.allSettled`: if some requests fail, the others still produce a catalog (not persisted, so the next load retries). It only throws when nothing came back.
-- Every body is validated with `parseSearchResults` (dropping malformed entries and Lookup's artist wrappers), normalized + enriched, de-duplicated by `trackId` (`normalizeTracks` → `dedupeTracks`) so React keys are always unique, and filtered with `isVaultTrack`.
-- **Caching & sharing:** memory cache → **`localStorage`** (`rmv:catalog:v3`, 6 h TTL, shared by every tab, re-validated via `parseCatalogCache`) → one shared in-flight batch. `App` reads `getCachedCatalog()` synchronously in its `useState` initializers, so a cached load renders the full catalog on the first frame (~60 ms, no loading state, no requests). The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`) and unsubscribes its `onProgress`, so StrictMode's mount → unmount → mount fires the network batch once (a caller joining mid-batch immediately gets the tracks so far). `forceRefresh` (Retry) clears both caches and starts a new batch.
+- Every body is validated with `parseSearchResults` (dropping malformed entries and Lookup's artist wrappers), normalized + enriched, and filtered with `isVaultTrack`. **`normalizeTrack` rejects non-studio versions** via `isStudioRecording(title, album)`: "(Live…", "[Live…", "- Live", "Live at/from/in/on" + a capitalised venue (so "Live and Let Die" and "To Live Is to Die" stay), commentary, karaoke, interview and unplugged.
+- `mergeCatalogTracks` de-duplicates by `trackId` (unique React keys) **and by song** (`dedupeSongs`: lead artist + `normalizeTitleKey(title)`), so a recording Apple also lists on a compilation appears once.
+- **Caching & sharing:** memory cache → **`localStorage`** (`rmv:catalog:v4`, 6 h TTL, shared by every tab, re-validated via `parseCatalogCache`) → one shared in-flight batch. `App` reads `getCachedCatalog()` synchronously in its `useState` initializers, so a cached load renders the full catalog on the first frame (~60 ms, no loading state, no requests). The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`) and unsubscribes its `onProgress`, so StrictMode's mount → unmount → mount fires the network batch once (a caller joining mid-batch immediately gets the tracks so far). `forceRefresh` (Retry) clears both caches and starts a new batch.
 - `App` holds `tracks`, `status: FetchStatus` (initially `'loading'`), and `error: string | null`, and passes them, plus `onRetry`, to Catalog, Detail, and Arena.
 - **Retry:** `handleRetry` sets `status` back to `'loading'` and bumps a `requestId` counter, which is the effect's dependency, so the effect runs again. State is never set synchronously inside the effect body.
 - Uses an `AbortController` in the effect cleanup; results and errors that arrive after an abort are ignored. React StrictMode's double-mount and fast navigation never update state from a stale request.
@@ -466,7 +474,8 @@ There are no external state libraries — just React state, custom hooks, and pr
 ```
 
 - **Persistent playback:** `src/audio/playerEngine.ts` owns a single lazily created `<audio crossOrigin="anonymous">` element and the Web Audio graph for the whole page, outside React. Routes can mount and unmount freely, and the music keeps playing.
-- **Store API:** `subscribe` / `getSnapshot` (for `useSyncExternalStore`), with a `PlayerSnapshot` of `{ track, isPlaying, currentTime, duration, presetId, engine: 'idle' | 'active' | 'unavailable', error }`. Actions: `playTrack(track)`, `togglePlay(track)`, `pause()`, `seek(seconds)`, `stop()`, `setPreset(id)`, and `readFrequencies()`. A `requestAnimationFrame` ticker updates `currentTime` while playing (only when it moved ≥ 1/30 s).
+- **Store API:** `subscribe` / `getSnapshot` (for `useSyncExternalStore`), with a `PlayerSnapshot` of `{ track, concealed, isPlaying, currentTime, duration, presetId, engine: 'idle' | 'active' | 'unavailable', error, queue, queueIndex, queueLabel }`. Actions: `playTrack(track, { concealed? })`, `playQueue(tracks, startIndex, label)`, `nextTrack()`, `previousTrack()`, `togglePlay(track)`, `pause()`, `seek(seconds)`, `stop()`, `setPreset(id)`, `readFrequencies()`, and `onTrackEnded(listener)`.
+- **Queue:** `playQueue` stores a copy of the tracks and plays from `startIndex`. When a queued preview ends, the engine auto-advances. ⏭ / ⏮ use the pure `getQueueStep(length, index, direction, currentTime)`: ⏮ restarts the current track after 3 s or on the first track, and ⏭ stops at the end. `playTrack` on a track inside the queue jumps the queue there; any other track, a concealed Blind-Test round, or `stop()` ends the queue. `formatQueuePosition` renders "Setlist 2 / 7". A `requestAnimationFrame` ticker updates `currentTime` while playing (only when it moved ≥ 1/30 s).
 - **Picking up playback:** `AudioPreviewPlayer` compares `player.track.id` with its own track. If they match (playing or paused), it shows and controls the ongoing playback — returning to `/tracks/:id` never restarts it. Pressing Play on another track's console replaces the loaded preview.
 - **Now Playing bar:** `MiniPlayer` lives outside `<Routes>` and shows whenever a preview is loaded, except on that track's own detail page (`shouldShowMiniPlayer(loadedId, pathname)`). A spacer keeps it from covering page content; ✕ calls `stop()`, which unloads the preview.
 - **Graceful fallback:** if `AudioContext` is missing or graph creation throws, `engine` becomes `'unavailable'`. The plain `<audio>` element keeps playing, the EQ buttons are disabled, and a note explains why.
@@ -481,7 +490,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 - `buildFestivalLineup(tracks)` groups setlist tracks by artist into `LineupAct`s (carrying the act's origin flag/country and style). Acts are ranked by number of tracks (desc), then runtime (desc), then name. The top `getHeadlinerCount(acts) = min(3, ceil(acts / 3))` acts are **Headliners**; the rest form the **Main Stage** underbill. `totalRuntimeMs` = `getTotalDuration(tracks)`.
 - `SetlistPage` shows the theme switcher (a radio group), the poster, and the **running order** (saved order, durations, detail links, Remove buttons, and a two-step "Clear Lineup" confirmation).
-- `FestivalPoster` is pure presentation. The theme is a `data-theme="foggy-woodland|blood-moon|vintage-tour"` attribute that swaps CSS custom properties (`--poster-bg`, `--poster-ink`, `--poster-accent`, `--poster-font`), so there's no theme-specific JSX.
+- `FestivalPoster` is pure presentation. The theme is a `data-theme` attribute (`hellfire-forge`, `catacomb-black`, `thrash-pit-86`, `foggy-woodland`, `blood-moon`, `vintage-70s-arena`) that swaps CSS custom properties (`--poster-bg`, `--poster-ink`, `--poster-accent`, `--poster-font`), so there's no theme-specific JSX.
 
 ### 4 — Riff Blind-Test Challenge
 
@@ -516,7 +525,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **114 tests in 5 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **129 tests in 5 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 
@@ -582,15 +591,17 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `reviveStoredTrack` | `(value: unknown) => Track \| null` | Validates stored JSON and re-derives origin/flag/style | ✅ Task 6 |
 | `parseStoredSetlist` | `(raw: string \| null) => Track[]` | Safe `JSON.parse`; `[]` for null, invalid JSON, or non-arrays; drops malformed entries and duplicates | ✅ Task 6 |
 | `getBrowserStorage` / `loadSetlist` / `saveSetlist` | `() => Storage \| null` / `(storage) => Track[]` / `(storage, tracks) => boolean` | `localStorage` access that never throws (`SETLIST_STORAGE_KEY = 'rmv:setlist'`) | ✅ Task 6 |
-| `POSTER_THEMES` | `PosterThemeOption[]` | Foggy Woodland, Blood Moon, Vintage Tour | ✅ Task 6 |
+| `POSTER_THEMES` / `SETLIST_QUEUE_LABEL` | `PosterThemeOption[]` / `'Setlist'` | The 6 poster designs in switcher order; the lineup queue's label | ✅ Task 6 + upgrade |
 | `getHeadlinerCount` / `buildFestivalLineup` | `(acts) => number` / `(tracks) => FestivalLineup` | Top-third headliners (1–3); groups, ranks, and splits into Headliners / Main Stage | ✅ Task 6 |
 
 ### `src/utils/catalogCache.ts` & `src/api/itunes.ts` (pure parts)
 
 | Function / constant | Signature | Behavior | Test |
 | --- | --- | --- | --- |
-| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v3'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
-| `mergeCatalogTracks` | `(current, incoming) => Track[]` | Progressive merge: on-screen tracks keep their place, duplicate ids dropped | ✅ |
+| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v4'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
+| `mergeCatalogTracks` / `dedupeSongs` | `(current, incoming) => Track[]` / `(tracks) => Track[]` | Progressive merge (on-screen tracks keep their place) dropping duplicate ids and repeat releases of the same song | ✅ |
+| `getQueueStep` / `formatQueuePosition` (`audioUtils.ts`) | `(length, index, direction, currentTime?) => number \| 'restart' \| null` / `(label, index, length) => string` | Lineup queue navigation and the "Setlist 2 / 7" label | ✅ |
+| `isStudioRecording` (`trackUtils.ts`) | `(trackName, collectionName?) => boolean` | Studio-only filter (live, commentary, karaoke, interview, unplugged) | ✅ |
 | `getTrackIdFromPath` / `shouldShowMiniPlayer` (`audioUtils.ts`) | `(pathname) => number \| null` / `(loadedId, pathname) => boolean` | Mini-player visibility rule | ✅ |
 | `serializeCatalogCache` / `parseCatalogCache` | `(tracks, now) => string` / `(raw, now, ttl?) => Track[] \| null` | `null` when missing, corrupted, expired, from the future, or empty; tracks are re-validated | ✅ expansion |
 | `buildSearchUrl` / `buildLookupUrls` / `getCatalogRequestUrls` | `(term) => string` / `(ids) => string[]` / `() => string[]` | The request plan: 3 searches + lookups of ≤ 100 ids (≤ 5 requests) | ✅ expansion |
@@ -628,7 +639,9 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
   - radii, `--gutter`, `--page-max`, `--mini-player-height`;
   - motion (`--ease-out`, `--duration*`).
 - **Visual identity:**
-  - Pages: a crimson stage-light wash on the page background, Oswald uppercase page titles with a glowing underline, and a translucent blurred sticky navbar with a guitar-pick logo and a glowing active-link bar.
+  - **Stage background:** two fixed, non-interactive layers behind the app. `body::before` stacks an amp-grille dot mesh and a carbon weave over blood-crimson stage-smoke gradients; `body::after` adds a heavy vignette frame.
+  - **Pages:** chrome-lettered Oswald titles (`--chrome-text` with `background-clip: text` and drop shadows) with a slanted ember underline, and a translucent blurred sticky navbar with a guitar-pick logo and a glowing active-link bar.
+  - **Heavy metal finish:** sharp radii (4–8px), bevelled buttons (`--bevel-strong`, uppercase Oswald, ember glow on hover), and industrial corner brackets (`--corner-brackets`) on panels and track cards, brightening on hover. Section headings carry a crimson accent bar.
   - Amp Console: a brushed-metal amp head with corner screws, a recessed visualizer screen, a chrome-red play knob, and EQ switches in a 2 × 2 bank whose LED glows amber when engaged.
   - Riff tab: mono text in a sunken screen. It scrolls horizontally inside its own frame, with the string names pinned (`position: sticky`).
   - Arena: the Blind-Test is a spotlit stage with a framed artwork plinth, an LED-style scoreboard, and lives as amp tubes (lit ones glow and flicker, blown ones are dark and cracked). The final banner has rotating light rays and an amber rank badge.
@@ -637,7 +650,11 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 - **Poster themes** override `--poster-*` variables under `[data-theme]`:
   - Foggy Woodland: mist layers, pine silhouettes, serif type.
   - Blood Moon: moon glow and stars, red-hot type.
-  - Vintage Tour: halftone cream paper, double ink border, slab type.
+  - Vintage '70s Arena: halftone parchment, a sunburst, coffee stains, double ink border, slab type with a retro offset shadow.
+  - Hellfire Forge: molten ember gradients, a riveted iron frame, sparks, New Rocker fire-gradient lettering.
+  - Catacomb Black: silver UnifrakturCook blackletter on pitch black with ✠ ornaments and double rules.
+  - Thrash Pit '86: hazard-stripe bands, photocopy grain, a tilted Metal Mania title.
+  - The three display faces (Metal Mania, New Rocker, UnifrakturCook) are only downloaded when a poster theme uses them.
   - Tiered typography: the top headliner is largest, other headliners large, and the Main Stage underbill small and grouped.
 - **Micro-interactions:** card lifts with a crimson glow, mood-pill and option-button lifts, a pressed-in EQ switch, a shake on a wrong answer, tube flicker, and a mini-player slide-in. The global `prefers-reduced-motion: reduce` rule turns all animation and transition durations down to near zero.
 - **Responsive:** fluid `clamp()` spacing and type, and `minmax(min(100%, …), 1fr)` grids with `min-width: 0` on grid children so nothing forces horizontal overflow.

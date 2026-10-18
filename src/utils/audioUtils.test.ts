@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   EQ_PRESETS,
   EQ_PRESET_IDS,
+  RESTART_THRESHOLD_SECONDS,
   bucketFrequencies,
+  formatQueuePosition,
+  getQueueStep,
   getTrackIdFromPath,
   shouldShowMiniPlayer,
 } from './audioUtils'
@@ -70,5 +73,30 @@ describe('Now Playing mini-player visibility', () => {
   it('stays hidden during concealed Blind-Test playback so the answer is not revealed', () => {
     expect(shouldShowMiniPlayer(574050602, '/arena', true)).toBe(false)
     expect(shouldShowMiniPlayer(574050602, '/arena', false)).toBe(true)
+  })
+})
+
+describe('playback queue', () => {
+  it('advances with ⏭ and auto-advance until the last track', () => {
+    expect(getQueueStep(7, 0, 'next')).toBe(1)
+    expect(getQueueStep(7, 5, 'next')).toBe(6)
+    expect(getQueueStep(7, 6, 'next')).toBeNull() // end of the lineup: stop
+  })
+
+  it('goes back with ⏮, or restarts the current song once it has played a few seconds', () => {
+    expect(getQueueStep(7, 3, 'previous', 1)).toBe(2)
+    expect(getQueueStep(7, 3, 'previous', RESTART_THRESHOLD_SECONDS + 0.5)).toBe('restart')
+    expect(getQueueStep(7, 0, 'previous', 0)).toBe('restart') // first track: rewind
+  })
+
+  it('does nothing without a valid queue position', () => {
+    expect(getQueueStep(0, 0, 'next')).toBeNull()
+    expect(getQueueStep(5, null, 'next')).toBeNull()
+    expect(getQueueStep(5, 9, 'previous')).toBeNull()
+  })
+
+  it('formats the queue position for the players', () => {
+    expect(formatQueuePosition('Setlist', 1, 7)).toBe('Setlist 2 / 7')
+    expect(formatQueuePosition('Setlist', 0, 1)).toBe('Setlist 1 / 1')
   })
 })

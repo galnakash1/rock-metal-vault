@@ -1,6 +1,6 @@
 import type { EqPresetId } from '../types/audio'
 import type { Track } from '../types/track'
-import { EQ_BANDS, EQ_PRESETS } from '../utils/audioUtils'
+import { EQ_BANDS, EQ_PRESETS, getQueueStep, type QueueDirection } from '../utils/audioUtils'
 
 /**
  * The app-wide preview player. One <audio> element and one Web Audio graph live here, outside
@@ -27,6 +27,10 @@ export interface PlayerSnapshot {
   presetId: EqPresetId
   engine: AmpEngineState
   error: string | null
+  /** Playback queue (e.g. the festival lineup); empty when playing a single track. */
+  queue: readonly Track[]
+  queueIndex: number | null // position of the current track in `queue`
+  queueLabel: string | null // e.g. "Setlist"
 }
 
 interface AmpGraph {
@@ -57,6 +61,9 @@ let snapshot: PlayerSnapshot = {
   presetId: 'flat',
   engine: 'idle',
   error: null,
+  queue: [],
+  queueIndex: null,
+  queueLabel: null,
 }
 const listeners = new Set<() => void>()
 const endedListeners = new Set<(track: Track) => void>()
@@ -128,6 +135,8 @@ function getAudio(): HTMLAudioElement {
     settle()
     const endedTrack = snapshot.track
     if (endedTrack) for (const listener of endedListeners) listener(endedTrack)
+    // Auto-advance: when a queued track finishes, the next one starts.
+    if (!snapshot.concealed) void stepQueue('next')
   })
   element.addEventListener('seeked', () => update({ currentTime: element.currentTime }))
   element.addEventListener('loadedmetadata', () => {
@@ -233,8 +242,59 @@ export interface PlayOptions {
   concealed?: boolean
 }
 
-/** Loads (if needed) and plays a track's preview. Switching tracks replaces the current one. */
+const NO_QUEUE = { queue: [], queueIndex: null, queueLabel: null } as const
+
+/**
+ * Loads (if needed) and plays a track's preview. Switching tracks replaces the current one.
+ * Playing a track that's in the active queue jumps the queue there; any other track (or a
+ * concealed Blind-Test round) ends the queue.
+ */
 export async function playTrack(track: Track, { concealed = false }: PlayOptions = {}): Promise<void> {
+  const queueIndex = concealed ? -1 : snapshot.queue.findIndex((queued) => queued.id === track.id)
+  if (queueIndex >= 0) {
+    if (queueIndex !== snapshot.queueIndex) update({ queueIndex })
+  } else if (snapshot.queue.length > 0) {
+    update(NO_QUEUE)
+  }
+  return loadAndPlay(track, concealed)
+}
+
+/** Plays `tracks` in order from `startIndex`, advancing automatically (e.g. the festival lineup). */
+export function playQueue(tracks: readonly Track[], startIndex = 0, label = 'Setlist'): Promise<void> {
+  const start = tracks[startIndex]
+  if (!start) return Promise.resolve()
+  update({ queue: [...tracks], queueIndex: startIndex, queueLabel: label })
+  return loadAndPlay(start, false)
+}
+
+/** ⏭ / ⏮ / auto-advance within the active queue. Returns false when there was nowhere to go. */
+async function stepQueue(direction: QueueDirection): Promise<boolean> {
+  const step = getQueueStep(snapshot.queue.length, snapshot.queueIndex, direction, snapshot.currentTime)
+  if (step === null) return false
+  if (step === 'restart') {
+    seek(0)
+    if (audio?.paused) await loadAndPlay(snapshot.queue[snapshot.queueIndex ?? 0] ?? null, false)
+    return true
+  }
+  const next = snapshot.queue[step]
+  if (!next) return false
+  update({ queueIndex: step })
+  await loadAndPlay(next, false)
+  return true
+}
+
+/** ⏭ Next track in the queue. */
+export function nextTrack(): Promise<boolean> {
+  return stepQueue('next')
+}
+
+/** ⏮ Previous track (or restart the current one when it's past the first few seconds). */
+export function previousTrack(): Promise<boolean> {
+  return stepQueue('previous')
+}
+
+async function loadAndPlay(track: Track | null, concealed: boolean): Promise<void> {
+  if (!track) return
   const element = getAudio()
   if (snapshot.track?.id !== track.id) {
     element.src = track.previewUrl
@@ -283,6 +343,7 @@ export function stop(): void {
     audio.load()
   }
   update({
+    ...NO_QUEUE,
     track: null,
     concealed: false,
     isPlaying: false,

@@ -375,3 +375,36 @@ Reviewed the new dark-mode Rock/Metal CSS design across all routes on desktop an
 > Stop after completing Task 9 and summarize the final verification results in 3 sentences.
 > </pasted_content id="5dbb">
 Reviewed final README.md, verified removal of unused Vite starter assets, and confirmed npm test (114 tests), npm run lint, and npm run build pass with zero errors. Marked Task 9 as done in tasks.md.
+**18:37 · claude**
+
+> <pasted_content id="5dbb">
+> After reviewing the app in the browser, I want to make 4 major upgrades to the catalog, audio player, and visual design so the app feels truly heavy, authentic, and packed with iconic studio tracks:
+> 
+> 1. **Strictly Exclude Live Recordings & Expand Iconic Rock/Metal Bands:**
+>    - **No Live Tracks:** Update track normalization/filtering in `src/utils/trackUtils.ts` to strictly filter out live recordings, commentary, and karaoke versions (e.g., reject tracks where `trackName` or `collectionName` contains patterns like `(Live`, `- Live`, `Live at `, `Live from `, `Live in `, `[Live`, `(Commentary`). Only clean studio recordings should enter the catalog.
+>    - **Much Deeper Iconic Band Coverage:** Currently, iconic bands feel too sparse or missing. Expand `src/utils/artistMetadata.ts` and `src/api/itunes.ts` so flagship Rock, Metal, and Metalcore bands (including Metallica, Iron Maiden, Black Sabbath, Ozzy Osbourne, Megadeth, Slayer, Pantera, Judas Priest, Motörhead, Slipknot, System Of A Down, Korn, Linkin Park, Deftones, Avenged Sevenfold, Disturbed, Rammstein, Gojira, Opeth, Ghost, Bad Omens, Bring Me The Horizon, Architects, Parkway Drive, Spiritbox, Trivium, Killswitch Engage, Lamb of God, Bullet For My Valentine, AC/DC, Guns N' Roses, Led Zeppelin, Deep Purple, Nirvana, Alice In Chains, Soundgarden, Foo Fighters, plus our Scandinavian and Israeli metal bands) return more studio tracks per artist (e.g., 6–10 top studio tracks for major headliners).
+>    - **Bump Cache Version:** Increment the `localStorage` catalog cache key version (e.g., to `v2` or `v3`) so the browser immediately discards the old cached catalog and loads the newly expanded studio-only catalog.
+> 
+> 2. **Playable Festival Lineup Queue (`/setlist` + `playerEngine.ts` + `MiniPlayer.tsx`):**
+>    - Enhance `src/utils/playerEngine.ts` to support a **Playback Queue** (`playQueue(tracks, startIndex)`), **Auto-Advance** (automatically playing the next track in the queue when a track finishes), **Next Track (`⏭`)**, and **Previous Track (`⏮`)**.
+>    - On `SetlistPage.tsx` (`/setlist`), add a prominent **"▶ Play Full Festival Lineup"** button (which queues and plays the entire festival lineup in running order, or pauses if already playing the lineup), plus a direct **Play/Pause** button on every individual row in the Festival Running Order list.
+>    - Update `MiniPlayer.tsx` (and `TrackDetailPage.tsx`) to display **Previous (`⏮`)** and **Next (`⏭`)** buttons and a queue position indicator (e.g., `Setlist 2 / 7`) whenever a multi-track queue is active.
+>    - Since the public keyless iTunes API provides 30-second DRM-free audio previews, also add a clean external **"Full Song on Apple Music ↗"** action on both the running order and detail page for listening to full-length tracks.
+> 
+> 3. **Heavier, More Authentic Rock & Metal Page Background & Aesthetic (`index.css` & `App.css`):**
+>    - Give the entire application a much cooler, unmistakably heavy Metal/Rock background and atmosphere:
+>      - Layer a dark textured background across `body` (e.g., subtle CSS carbon/amp-grille mesh pattern layered over deep blood-crimson and charcoal stage-smoke radial gradients and a dark vignette frame).
+>      - Upgrade card frames, section headers, and buttons with heavier metallic bevels, sharper distressed/industrial edge accents, stronger crimson/ember glow effects, and bold metal display typography.
+> 
+> 4. **More Poster Themes & Heavier Festival Poster Designs (`/setlist`):**
+>    - Expand the Festival Poster Builder from 3 themes to **6 distinct, high-impact Rock & Metal poster designs**:
+>      1) `Hellfire Forge` (molten ember gradients, charred iron frame, fiery thrash/heavy metal typography)
+>      2) `Catacomb Black` (stark gothic monochrome silver-on-pitch-black with sharp ornate divider lines)
+>      3) `Thrash Pit '86` (high-contrast hazard yellow,crimson & black 80s thrash/speed-metal flyer aesthetic)
+>      4) `Foggy Woodland` (upgraded deep Nordic forest mist, pine silhouettes & cold moonlight glow)
+>      5) `Blood Moon` (deep crimson ritual eclipse & sharp metalcore styling)
+>      6) `Vintage '70s Arena` (distressed warm tour poster parchment & classic hard-rock aesthetic)
+> 
+> Please implement all 4 upgrades, add unit tests for live-track filtering and queue/poster logic, and verify in headless Chrome that the expanded studio catalog loads, no `(Live)` tracks appear, the Setlist lineup plays and auto-advances, and `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`. Stop when done and summarize in 3 sentences.
+> </pasted_content id="5dbb">
+Tested the 661-track studio catalog, lineup playback queue, and 6 poster themes in the browser. Identified next set of UX and feature improvements: fix "Back to Vault" render lag, unify album artwork and exclude compilation covers (e.g. Nirvana's Lithium), add direct play on TrackCard, EQ selector in MiniPlayer, Spotify/YouTube links, Tour Stops instead of countries on poster, Tournament stages in Arena, a new 10-track Diagnostic Playlist Builder page, and a bolder metal background.

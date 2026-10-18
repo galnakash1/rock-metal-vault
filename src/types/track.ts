@@ -161,7 +161,13 @@ export type FetchStatus = 'loading' | 'error' | 'success'
 
 // ---------- Festival Lineup & Poster ----------
 
-export type PosterTheme = 'foggy-woodland' | 'blood-moon' | 'vintage-tour'
+export type PosterTheme =
+  | 'hellfire-forge'
+  | 'catacomb-black'
+  | 'thrash-pit-86'
+  | 'foggy-woodland'
+  | 'blood-moon'
+  | 'vintage-70s-arena'
 
 export interface PosterThemeOption {
   id: PosterTheme

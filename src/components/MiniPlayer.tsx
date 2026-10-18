@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
-import { stop, togglePlay } from '../audio/playerEngine'
+import { nextTrack, previousTrack, stop, togglePlay } from '../audio/playerEngine'
 import { usePlayer } from '../hooks/usePlayer'
-import { EQ_PRESETS, shouldShowMiniPlayer } from '../utils/audioUtils'
+import { EQ_PRESETS, formatQueuePosition, shouldShowMiniPlayer } from '../utils/audioUtils'
 import { formatDuration } from '../utils/trackUtils'
 
 /**
@@ -17,6 +17,11 @@ function MiniPlayer() {
 
   const progress = player.duration > 0 ? Math.min(player.currentTime / player.duration, 1) : 0
   const detailPath = `/tracks/${track.id}`
+  const queuePosition =
+    player.queue.length > 1 && player.queueIndex !== null
+      ? formatQueuePosition(player.queueLabel ?? 'Queue', player.queueIndex, player.queue.length)
+      : null
+  const isLastInQueue = player.queueIndex !== null && player.queueIndex >= player.queue.length - 1
 
   return (
     <>
@@ -39,6 +44,11 @@ function MiniPlayer() {
           </span>
         </Link>
 
+        {queuePosition && (
+          <span className="mini-player-queue" aria-label={`Playing ${queuePosition}`}>
+            {queuePosition}
+          </span>
+        )}
         <span className="mini-player-eq" title="Current EQ preset">
           EQ · {EQ_PRESETS[player.presetId].label}
         </span>
@@ -46,6 +56,17 @@ function MiniPlayer() {
           {formatDuration(player.currentTime * 1000)} / {formatDuration(player.duration * 1000)}
         </span>
 
+        {queuePosition && (
+          <button
+            type="button"
+            className="mini-player-button"
+            onClick={() => void previousTrack()}
+            aria-label="Previous track"
+            title="Previous"
+          >
+            ⏮
+          </button>
+        )}
         <button
           type="button"
           className="mini-player-button mini-player-button--play"
@@ -54,6 +75,18 @@ function MiniPlayer() {
         >
           {player.isPlaying ? '❚❚' : '▶'}
         </button>
+        {queuePosition && (
+          <button
+            type="button"
+            className="mini-player-button"
+            onClick={() => void nextTrack()}
+            disabled={isLastInQueue}
+            aria-label="Next track"
+            title="Next"
+          >
+            ⏭
+          </button>
+        )}
         <button
           type="button"
           className="mini-player-button"

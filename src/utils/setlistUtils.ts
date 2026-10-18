@@ -130,12 +130,44 @@ export function saveSetlist(storage: Pick<Storage, 'setItem'> | null, tracks: re
   }
 }
 
+// ---------- Lineup playback ----------
+
+/** Queue label for the festival lineup ("Setlist 2 / 7" in the players). */
+export const SETLIST_QUEUE_LABEL = 'Setlist'
+
 // ---------- Festival poster ----------
 
 export const POSTER_THEMES: readonly PosterThemeOption[] = [
-  { id: 'foggy-woodland', label: 'Foggy Woodland', description: 'Misty greens and pale bone type' },
-  { id: 'blood-moon', label: 'Blood Moon', description: 'Black sky, crimson moon, red-hot type' },
-  { id: 'vintage-tour', label: 'Vintage Tour', description: 'Cream paper and ink, like a 70s tour bill' },
+  {
+    id: 'hellfire-forge',
+    label: 'Hellfire Forge',
+    description: 'Molten embers, a charred iron frame and fiery heavy-metal lettering',
+  },
+  {
+    id: 'catacomb-black',
+    label: 'Catacomb Black',
+    description: 'Stark gothic silver on pitch black with ornate divider rules',
+  },
+  {
+    id: 'thrash-pit-86',
+    label: "Thrash Pit '86",
+    description: 'Hazard yellow, crimson and black — an 80s thrash and speed-metal flyer',
+  },
+  {
+    id: 'foggy-woodland',
+    label: 'Foggy Woodland',
+    description: 'Deep Nordic forest mist, pine silhouettes and cold moonlight',
+  },
+  {
+    id: 'blood-moon',
+    label: 'Blood Moon',
+    description: 'A deep crimson ritual eclipse with sharp metalcore styling',
+  },
+  {
+    id: 'vintage-70s-arena',
+    label: "Vintage '70s Arena",
+    description: 'Distressed warm parchment, like a classic hard-rock arena tour poster',
+  },
 ]
 
 const MAX_HEADLINERS = 3

@@ -3,6 +3,7 @@ import mockData from '../data/mockTracks.json'
 import type { Track } from '../types/track'
 import {
   POSTER_THEMES,
+  SETLIST_QUEUE_LABEL,
   SETLIST_STORAGE_KEY,
   buildFestivalLineup,
   getHeadlinerCount,
@@ -188,11 +189,25 @@ describe('buildFestivalLineup', () => {
 })
 
 describe('POSTER_THEMES', () => {
-  it('offers the three poster themes in switcher order', () => {
+  it('offers the six poster themes in switcher order', () => {
     expect(POSTER_THEMES.map((theme) => theme.label)).toEqual([
+      'Hellfire Forge',
+      'Catacomb Black',
+      "Thrash Pit '86",
       'Foggy Woodland',
       'Blood Moon',
-      'Vintage Tour',
+      "Vintage '70s Arena",
     ])
+  })
+
+  it('gives every theme a unique id and a description', () => {
+    expect(new Set(POSTER_THEMES.map((theme) => theme.id)).size).toBe(POSTER_THEMES.length)
+    for (const theme of POSTER_THEMES) expect(theme.description.length).toBeGreaterThan(10)
+  })
+})
+
+describe('lineup queue label', () => {
+  it('labels the festival lineup queue "Setlist"', () => {
+    expect(SETLIST_QUEUE_LABEL).toBe('Setlist')
   })
 })

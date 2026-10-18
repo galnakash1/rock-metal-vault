@@ -100,3 +100,31 @@ export function shouldShowMiniPlayer(
 ): boolean {
   return !concealed && loadedTrackId !== null && getTrackIdFromPath(pathname) !== loadedTrackId
 }
+
+// ---------- Playback queue ----------
+
+export type QueueDirection = 'next' | 'previous'
+
+/** Past this point, ⏮ restarts the current song instead of going back (like most players). */
+export const RESTART_THRESHOLD_SECONDS = 3
+
+/**
+ * Where a ⏭ / ⏮ press (or auto-advance) goes in a queue of `length` tracks:
+ * a queue index, 'restart' to rewind the current track, or null when there's nowhere to go.
+ */
+export function getQueueStep(
+  length: number,
+  index: number | null,
+  direction: QueueDirection,
+  currentTimeSec = 0,
+): number | 'restart' | null {
+  if (index === null || length <= 0 || index < 0 || index >= length) return null
+  if (direction === 'next') return index + 1 < length ? index + 1 : null
+  if (currentTimeSec > RESTART_THRESHOLD_SECONDS || index === 0) return 'restart'
+  return index - 1
+}
+
+/** "Setlist 2 / 7" — shown in the mini-player and on the detail page while a queue is active. */
+export function formatQueuePosition(label: string, index: number, length: number): string {
+  return `${label} ${index + 1} / ${length}`
+}

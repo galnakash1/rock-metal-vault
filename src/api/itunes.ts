@@ -1,5 +1,5 @@
 import type { ITunesTrackRaw, Track } from '../types/track'
-import { SPOTLIGHT_ARTIST_IDS } from '../utils/artistMetadata'
+import { HEADLINER_ARTIST_IDS, SPOTLIGHT_ARTIST_IDS } from '../utils/artistMetadata'
 import {
   CATALOG_CACHE_KEY,
   mergeCatalogTracks,
@@ -10,18 +10,25 @@ import { getBrowserStorage } from '../utils/setlistUtils'
 import { isVaultTrack, normalizeTracks, parseSearchResults } from '../utils/trackUtils'
 
 // ---------- Request plan ----------
-// Apple allows roughly 20 requests per minute. A cold catalog load makes 7 requests (and the
-// 6-hour localStorage cache means most loads make none): 3 broad searches for the mainstream,
-// plus 4 parallel Lookup calls returning a few songs from every curated international band
-// (Israel, Scandinavia, Japan, Brazil…) by artist id. Uncached lookups slow down sharply with
-// the number of ids (61 ids: ~5–12 s; 4 × ~16 ids in parallel: ~2 s), hence the small chunks.
+// Apple allows roughly 20 requests per minute. A cold catalog load makes 11 requests (and the
+// 6-hour localStorage cache means most loads make none), all in parallel:
+// - 3 broad searches for the mainstream;
+// - 4 headliner lookups: the top 10 songs of each flagship band (Metallica, Iron Maiden, Slipknot,
+//   Bring Me The Horizon…), by Apple artist id — live versions are filtered out afterwards;
+// - 4 spotlight lookups: 5 songs from every other curated band (Israel, Scandinavia, Japan…).
+// Uncached lookups slow down sharply with more ids (61 ids: ~5–12 s), hence the small chunks.
 
 const SEARCH_URL = 'https://itunes.apple.com/search'
 const LOOKUP_URL = 'https://itunes.apple.com/lookup'
 const SEARCH_TERMS = ['rock', 'metal', 'metalcore'] as const
 const RESULTS_PER_TERM = 50
-const SONGS_PER_SPOTLIGHT_ARTIST = 3 // the Lookup API applies `limit` per artist
-const MAX_IDS_PER_LOOKUP = 16 // small chunks keep each uncached lookup fast
+// The Lookup API applies `limit` per artist. Chunk sizes keep each uncached lookup ~2–5 s.
+export const LOOKUP_TIERS = {
+  headliner: { songsPerArtist: 10, idsPerLookup: 12 },
+  spotlight: { songsPerArtist: 5, idsPerLookup: 16 },
+} as const
+
+type LookupTier = (typeof LOOKUP_TIERS)[keyof typeof LOOKUP_TIERS]
 const REQUEST_TIMEOUT_MS = 15_000
 
 export function buildSearchUrl(term: string): string {
@@ -34,13 +41,16 @@ export function buildSearchUrl(term: string): string {
   return `${SEARCH_URL}?${params}`
 }
 
-export function buildLookupUrls(artistIds: readonly number[]): string[] {
+export function buildLookupUrls(
+  artistIds: readonly number[],
+  tier: LookupTier = LOOKUP_TIERS.spotlight,
+): string[] {
   const urls: string[] = []
-  for (let start = 0; start < artistIds.length; start += MAX_IDS_PER_LOOKUP) {
+  for (let start = 0; start < artistIds.length; start += tier.idsPerLookup) {
     const params = new URLSearchParams({
-      id: artistIds.slice(start, start + MAX_IDS_PER_LOOKUP).join(','),
+      id: artistIds.slice(start, start + tier.idsPerLookup).join(','),
       entity: 'song',
-      limit: String(SONGS_PER_SPOTLIGHT_ARTIST),
+      limit: String(tier.songsPerArtist),
     })
     urls.push(`${LOOKUP_URL}?${params}`)
   }
@@ -49,7 +59,11 @@ export function buildLookupUrls(artistIds: readonly number[]): string[] {
 
 /** Every URL one catalog load requests. */
 export function getCatalogRequestUrls(): string[] {
-  return [...SEARCH_TERMS.map(buildSearchUrl), ...buildLookupUrls(SPOTLIGHT_ARTIST_IDS)]
+  return [
+    ...SEARCH_TERMS.map(buildSearchUrl),
+    ...buildLookupUrls(HEADLINER_ARTIST_IDS, LOOKUP_TIERS.headliner),
+    ...buildLookupUrls(SPOTLIGHT_ARTIST_IDS, LOOKUP_TIERS.spotlight),
+  ]
 }
 
 // ---------- Network ----------

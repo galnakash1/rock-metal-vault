@@ -93,15 +93,44 @@ export function parseSearchResults(data: unknown): ITunesTrackRaw[] {
   return results.filter(isITunesTrackRaw)
 }
 
+// ---------- Studio-only filter ----------
+
+/** Live versions: "(Live…", "[Live…", "Song - Live", and live albums like "Live at Wembley". */
+const LIVE_PATTERNS: readonly RegExp[] = [
+  /[([]\s*live\b/i,
+  /\s[-–—]\s*live\b/i,
+  // "Live at/from/in/on" + a capitalised venue — but not song titles like "Live and Let Die".
+  /\b[Ll]ive (?:[Aa]t|[Ff]rom|[Ii]n|[Oo]n) (?:[Tt]he )?[A-Z0-9]/,
+]
+
+/** Other non-studio releases: commentary, karaoke, interviews, unplugged sessions. */
+const NON_STUDIO_PATTERNS: readonly RegExp[] = [
+  /\bcommentary\b/i,
+  /\bkaraoke\b/i,
+  /\binterview\b/i,
+  /\bunplugged\b/i,
+]
+
+/**
+ * True only for studio recordings: the track title and its album must not mark a live, commentary,
+ * karaoke, interview or unplugged version.
+ */
+export function isStudioRecording(trackName: string, collectionName = ''): boolean {
+  return ![trackName, collectionName].some((text) =>
+    [...LIVE_PATTERNS, ...NON_STUDIO_PATTERNS].some((pattern) => pattern.test(text)),
+  )
+}
+
 // ---------- Normalization ----------
 
 /**
  * Maps a raw iTunes result to the app's Track model and enriches it with the band's
- * origin country/flag and style. Returns null for non-track results and for tracks
- * without a preview, since every track in the Vault must be playable.
+ * origin country/flag and style. Returns null for non-track results, for tracks without a
+ * preview (every track in the Vault must be playable), and for live or other non-studio versions.
  */
 export function normalizeTrack(raw: ITunesTrackRaw): Track | null {
   if (raw.wrapperType !== 'track' || !raw.previewUrl) return null
+  if (!isStudioRecording(raw.trackName, raw.collectionName)) return null
 
   const artistId = raw.artistId ?? null
   const { originCountry, subgenre } = getArtistMetadata(

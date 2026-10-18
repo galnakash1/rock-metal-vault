@@ -12,9 +12,9 @@ It is a front-end-only single-page app built with **React 19 + TypeScript + Vite
 
 | Route | Page | What you can do |
 | --- | --- | --- |
-| `/` | **Vault Catalog** | Browse ~290 tracks as cards. Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort, and add tracks to your setlist. |
+| `/` | **Vault Catalog** | Browse ~660 studio tracks as cards. Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort, and add tracks to your setlist. |
 | `/tracks/:id` | **Track Detail** | 600×600 artwork and track facts, the **Amp Console** (preview player with live EQ and visualizer), and the **6-String Guitar Riff Tab** with a playhead that follows the music. |
-| `/setlist` | **Festival Lineup & Poster Builder** | Your saved tracks become a festival poster (Headliners and Main Stage) in one of 3 themes, with a running order you can edit. |
+| `/setlist` | **Festival Lineup & Poster Builder** | Your saved tracks become a festival poster (Headliners and Main Stage) in one of 6 themes. Play the whole lineup in running order (⏮ / ⏭, auto-advance), or any single row, and open full songs on Apple Music. |
 | `/arena` | **Riff Arena** | The **Riff Blind-Test** game (5 rounds, 3 amp-tube lives, final scoreboard) and the **Head-to-Head Track Battle**. |
 | `*` | **404** | "This track doesn't exist", with a link back to the Vault. |
 
@@ -37,7 +37,7 @@ A **Now Playing mini-player** stays at the bottom of every page, so a preview ke
   - **Signature riffs:** simplified tabs of famous opening riffs (Iron Man, Back In Black, Smoke on the Water, Smells Like Teen Spirit, Sweet Child O' Mine, Crazy Train, Nothing Else Matters).
   - **Practice riffs:** every other track gets a riff in its style, clearly labelled as a practice riff.
   - Each tab shows the tuning, an approximate BPM and a difficulty, with a highlighted playhead synced to the preview.
-- **🪧 Festival Poster Builder:** the bands you saved most become Headliners in huge type, and the rest form the Main Stage underbill. It shows track, band and runtime stats, with three themes: **Foggy Woodland**, **Blood Moon** and **Vintage Tour**.
+- **🪧 Festival Poster Builder:** the bands you saved most become Headliners in huge type, and the rest form the Main Stage underbill. It shows track, band and runtime stats, in six designs: **Hellfire Forge**, **Catacomb Black**, **Thrash Pit '86**, **Foggy Woodland**, **Blood Moon** and **Vintage '70s Arena**. **▶ Play Full Festival Lineup** queues the running order, with auto-advance, ⏮ / ⏭, play buttons on each row, and a queue position ("Setlist 2 / 7") in the mini-player and the Amp Console.
 - **🎯 Riff Blind-Test Challenge:**
   - A hidden preview plays while the artwork unblurs from 24px to 0px over 30 seconds. You pick the track from 4 options; the 3 decoys are realistic (same style or country first).
   - Faster correct guesses score more (up to 1,000 points per round, 5,000 per set).
@@ -54,7 +54,7 @@ A **Now Playing mini-player** stays at the bottom of every page, so a preview ke
 | Audio | HTML5 `<audio>` + Web Audio API |
 | State | React state and props, plus one small external store for the player (`useSyncExternalStore`). No state library. |
 | Persistence | `localStorage` (setlist, catalog cache, arena records) |
-| Styling | Plain CSS with custom properties: a dark Rock/Metal theme, responsive from 375px. **No UI library.** |
+| Styling | Plain CSS with custom properties: a heavy dark Rock/Metal stage (amp-grille mesh, crimson smoke, vignette, chrome titles, bevelled metal), responsive from 375px. **No UI library.** |
 | Testing | Vitest 5 + `@vitest/ui` |
 
 ## Getting started
@@ -88,15 +88,15 @@ npm test
 npm run test:ui
 ```
 
-There are **114 unit tests in 5 files**. They cover the app's pure logic and never touch the network:
+There are **129 unit tests in 5 files**. They cover the app's pure logic and never touch the network:
 
 | Test file | Covers |
 | --- | --- |
-| `src/utils/trackUtils.test.ts` | Duration formatting, artwork upgrade, response validation, normalization and de-duplication, band origin and style enrichment, the genre allowlist and namesake rejection, filtering, Sonic Mood Capsules (with boundaries), sorting, riff tabs and playhead, and the Riff Arena rules (rounds and decoys, blur, scoring, sets and lives, ranks, records, Head-to-Head metrics) |
-| `src/utils/setlistUtils.test.ts` | Setlist toggle and remove, `localStorage` parsing (including corrupted data), and poster tiers (Headliners vs Main Stage) |
-| `src/utils/catalogCache.test.ts` | The catalog cache TTL and validation, and the progressive merge |
-| `src/utils/audioUtils.test.ts` | EQ presets, visualizer frequency bucketing, and mini-player visibility |
-| `src/api/itunes.test.ts` | The request plan (stays under Apple's rate limit) |
+| `src/utils/trackUtils.test.ts` | Duration formatting, artwork upgrade, response validation, the studio-only (no live) filter, normalization and de-duplication, the headliner tier, band origin and style enrichment, the genre allowlist and namesake rejection, filtering, Sonic Mood Capsules (with boundaries), sorting, riff tabs and playhead, and the Riff Arena rules (rounds and decoys, blur, scoring, sets and lives, ranks, records, Head-to-Head metrics) |
+| `src/utils/setlistUtils.test.ts` | Setlist toggle and remove, `localStorage` parsing (including corrupted data), poster tiers (Headliners vs Main Stage), and the 6 poster themes |
+| `src/utils/catalogCache.test.ts` | The catalog cache TTL and validation, the progressive merge, and song-level de-duplication |
+| `src/utils/audioUtils.test.ts` | EQ presets, visualizer frequency bucketing, mini-player visibility, and lineup queue navigation (⏮ / ⏭ / auto-advance) |
+| `src/api/itunes.test.ts` | The request plan (headliner and spotlight tiers; stays under Apple's rate limit) |
 
 The tests use `src/data/mockTracks.json` as a fixture: 10 real iTunes records, loaded through the same validation as live data.
 
@@ -107,16 +107,20 @@ The tests use `src/data/mockTracks.json` as a fixture: 10 real iTunes records, l
 | Endpoint | Used for |
 | --- | --- |
 | `https://itunes.apple.com/search?term=…&media=music&entity=song&limit=50` | Three broad searches (`rock`, `metal`, `metalcore`) for the mainstream catalog |
-| `https://itunes.apple.com/lookup?id=…&entity=song&limit=3` | 3 songs from each of 61 curated international bands, by Apple artist id (4 parallel lookups of ~16 ids each) |
+| `https://itunes.apple.com/lookup?id=…&entity=song&limit=10` | **Headliner tier:** the top 10 songs of 37 flagship bands (Metallica, Iron Maiden, Slipknot, Bring Me The Horizon…), by Apple artist id (4 lookups of ~12 ids) |
+| `https://itunes.apple.com/lookup?id=…&entity=song&limit=5` | **Spotlight tier:** 5 songs from each of 56 other curated bands, mostly the international scene (Israel, Scandinavia, Japan…) (4 lookups of ~16 ids) |
 
 Preview audio and artwork are served with `Access-Control-Allow-Origin: *`, which lets the Web Audio API analyse and EQ the previews.
 
 ### Loading pipeline
 
 1. **Instant from cache.** The normalized catalog is cached in memory and in **`localStorage`** for 6 hours, and shared by every tab. A cached load renders the full catalog on the first frame, with no network requests.
-2. **Progressive network load.** On a cold start, the 7 requests run in parallel. Tracks appear as soon as the fastest search returns (about 0.8 s in a production build); the rest merge in under a "Loading more bands…" note (the full catalog takes about 1.8 s). If one request fails, the others still load.
-3. **Validate → normalize → enrich → de-duplicate → filter.** Responses are checked at runtime (`parseSearchResults`), mapped to the app's `Track` model, and enriched. Duplicate `trackId`s are dropped, so React keys are always unique. Off-genre hits like "Jingle Bell Rock" are filtered out.
-4. **Rate-limit friendly.** Apple allows roughly 20 requests per minute. React StrictMode's double mount shares one in-flight batch, cached loads make no requests, and **Retry** forces a fresh fetch.
+2. **Progressive network load.** On a cold start, the 11 requests run in parallel. Tracks appear as soon as the fastest search returns; the rest merge in under a "Loading more bands…" note. If one request fails, the others still load.
+3. **Validate → normalize → enrich → de-duplicate → filter.** Responses are checked at runtime (`parseSearchResults`), mapped to the app's `Track` model, and enriched.
+   - **Studio recordings only:** live versions ("(Live)", "- Live", "Live at Wembley"…), commentary, karaoke, interview and unplugged releases are rejected by `isStudioRecording`.
+   - **One copy per song:** duplicate `trackId`s are dropped (unique React keys), and so are repeat releases of the same song on another album (`dedupeSongs`).
+   - **Off-genre filter:** hits like "Jingle Bell Rock" are removed.
+4. **Rate-limit friendly.** Apple allows roughly 20 requests per minute, and a cold load makes 11. React StrictMode's double mount shares one in-flight batch, cached loads make no requests, and **Retry** forces a fresh fetch.
 
 ### Enrichment
 
@@ -131,7 +135,7 @@ Matching uses Apple's artist id first, then the name with accents and case ignor
 
 | Key | Contents |
 | --- | --- |
-| `rmv:catalog:v3` | Cached catalog (6 h TTL) |
+| `rmv:catalog:v4` | Cached catalog (6 h TTL; the version is bumped whenever the catalog rules change) |
 | `rmv:setlist` | Your festival setlist (full tracks, re-validated on load) |
 | `rmv:arena:high-score`, `rmv:arena:best-streak` | All-time Riff Blind-Test records |
 

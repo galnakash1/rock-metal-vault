@@ -408,3 +408,59 @@ Reviewed final README.md, verified removal of unused Vite starter assets, and co
 > Please implement all 4 upgrades, add unit tests for live-track filtering and queue/poster logic, and verify in headless Chrome that the expanded studio catalog loads, no `(Live)` tracks appear, the Setlist lineup plays and auto-advances, and `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`. Stop when done and summarize in 3 sentences.
 > </pasted_content id="5dbb">
 Tested the 661-track studio catalog, lineup playback queue, and 6 poster themes in the browser. Identified next set of UX and feature improvements: fix "Back to Vault" render lag, unify album artwork and exclude compilation covers (e.g. Nirvana's Lithium), add direct play on TrackCard, EQ selector in MiniPlayer, Spotify/YouTube links, Tour Stops instead of countries on poster, Tournament stages in Arena, a new 10-track Diagnostic Playlist Builder page, and a bolder metal background.
+**20:43 · claude**
+
+> <pasted_content id="5dbb">
+> Great job on the previous upgrade—it is now committed. After testing the app thoroughly in the browser, I want to implement 10 targeted improvements across performance, catalog quality, audio controls, visual design, and a new interactive page:
+> 
+> 1. **Fix "Back to Vault" Navigation Lag (Instant Catalog Mounting):**
+>    - Navigating back to `/` ("Back to Vault") lags because `CatalogPage` renders all ~660 `TrackCard` DOM nodes at once.
+>    - Fix this by rendering the first **48 cards** initially on `CatalogPage` and progressively revealing more in chunks of 48 via an `IntersectionObserver` infinite-scroll sentinel (plus a fallback "Show More Tracks" button), and wrap `TrackCard` in `React.memo`. Returning to `/` must feel instantaneous (<16ms).
+> 
+> 2. **Consistent Studio Album Artwork & Exclude Compilation Albums (Nirvana "Lithium" Fix):**
+>    - Songs from the same album sometimes show different covers because Apple returns tracks from compilation albums (e.g., Nirvana's "Lithium" got a compilation cover instead of *Nevermind*).
+>    - During track normalization/deduplication in `src/utils/trackUtils.ts`:
+>      a) Filter out or deprioritize greatest-hits/compilation albums (`Greatest Hits`, `Best Of`, `Best of`, `Anthology`, `Essential`, `Icon`, `20th Century Masters`, `Retrospective`, `The Singles`) so original studio albums are chosen.
+>      b) Canonicalize album artwork: ensure all tracks sharing the same artist and normalized studio album name use the exact same `artworkUrl` (and canonical studio album metadata).
+> 
+> 3. **Even More Tracks for Flagship Bands:**
+>    - Pull deeper studio catalogs (up to **20–25 tracks per artist**) for our top flagship bands—specifically ensuring deep selections for **Meshuggah, Slipknot, Bring Me The Horizon, Metallica, Iron Maiden, Bad Omens, Architects, Nirvana, System Of A Down, Avenged Sevenfold, Gojira, Korn, Linkin Park, Opeth, Pantera, Slayer, Megadeth, Black Sabbath, AC/DC, Guns N' Roses, and Rammstein**.
+>    - Bump the `localStorage` catalog cache version key (e.g., to `v5`) so the browser immediately loads the updated catalog.
+> 
+> 4. **Direct Play/Pause Button on `TrackCard` (Next to Setlist Button):**
+>    - Let users play/pause a track's preview directly from its `TrackCard` on `/` without opening `/tracks/:id`, placed right alongside the `SetlistButton` (clicking play on a catalog card can queue the currently filtered list starting at that track).
+> 
+> 5. **EQ Preset Switcher Inside `MiniPlayer.tsx`:**
+>    - Replace the static EQ badge in the bottom `MiniPlayer` with an interactive EQ preset selector (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`) so users can switch the live EQ sound directly from the bottom bar on any page.
+> 
+> 6. **Add Spotify & YouTube Links Alongside Apple Music:**
+>    - Upgrade `AppleMusicLink` (or create `StreamingLinks`) so wherever full-song external links appear (`TrackDetailPage`, `SetlistPage` running order, and the new Playlist Builder), users get 3 sleek external links: **Apple Music**, **Spotify** (`https://open.spotify.com/search/...`), and **YouTube** (`https://www.youtube.com/results?search_query=...`).
+> 
+> 7. **Festival Poster: Replace Band Origin Countries with World Tour Stops (`/setlist`):**
+>    - On the stylized Festival Poster in `SetlistPage.tsx`, remove the bands' origin country names/flags (keep country flags only in the Catalog).
+>    - Instead, display an authentic **World Tour Dates & Venues** section on the poster (showing a tour schedule of iconic rock/metal festival grounds & arenas such as *Wacken · Germany*, *Donington Park · UK*, *Hellfest · Clisson*, *Ullevi · Gothenburg*, *Red Rocks · USA*, *Expo Tel Aviv · Israel*, *Budokan · Tokyo*).
+> 
+> 8. **Upgrade Riff Blind-Test into a Multi-Stage Tournament (`/arena`):**
+>    - Turn the Riff Blind-Test into a progressive **Tournament**:
+>      - **Stage 1 (Mainstream Headliners - Easy):** Starts with famous flagship bands (Metallica, Nirvana, AC/DC, Iron Maiden, Slipknot, Black Sabbath, Linkin Park, Guns N' Roses), moderate blur, `1.0x` points.
+>      - **Stage 2 (Modern Heavyweights & Pit Icons - Medium):** Bands like Bring Me The Horizon, Bad Omens, Architects, Korn, System Of A Down, Gojira, Rammstein, Pantera, Avenged Sevenfold, heavier initial blur, closer decoys, `1.5x` points.
+>      - **Stage 3+ (Extreme, Progressive & Global Underground - Hard/Elite):** Meshuggah, Scandinavian melodic death/black/symphonic metal, Israeli metal, deep cuts, heavy blur, same-style decoys, `2.0x+` points.
+>    - Each stage is 5 rounds. If the player completes a stage with at least 1 life left, show a **"Stage X Cleared! Advance to Stage X+1 →"** transition screen (carrying over lives + restoring 1 life up to 3 max) so they keep climbing until they either conquer the tournament or lose all lives.
+> 
+> 9. **New Page: 10-Track Playlist Diagnostic Builder (`/builder`):**
+>    - Add a new route `/builder` (`src/pages/PlaylistBuilderPage.tsx`) and link it in `Navbar.tsx` (**"Playlist Builder"**).
+>    - Present an interactive 5-question **Sonic Diagnostic** (e.g., Tempo/Energy, Era/Guitar Tone, Mood/Atmosphere, Regional Scene, Iconic vs. Deep Cuts).
+>    - Use a pure diagnostic scoring function in `src/utils/` (unit-tested in Vitest) to match the user's profile, assign them a Metal Persona title, and generate a tailored **10-Track Playlist** from the catalog.
+>    - Let the user preview individual songs, click **"▶ Play All 10 Tracks"**, click **"Add All 10 to Festival Setlist"**, swap individual tracks, or re-run the diagnostic.
+> 
+> 10. **Much Bolder, Visibly Metal Page Background (`index.css` & `App.css`):**
+>     - The current page background still looks like plain black in the browser because the textures/gradients are too subtle.
+>     - Make the global backdrop unmistakably visual and metal: use high-visibility crimson/molten-amber stage lighting beams, visible speaker-grille / diamond-plate steel texture, atmospheric SVG concert stage truss/lightning/ember motifs in the backdrop, and slightly translucent card/section surfaces so the stage backdrop is clearly visible on every screen.
+> 
+> Please implement all 10 items, add unit tests for the new compilation/artwork logic, tournament stages, and 10-track diagnostic builder, and verify everything in headless Chrome (`npm test`, `npm run build`, `npm run lint` with zero errors and zero `any`). Stop when done and summarize in 3 sentences.
+> </pasted_content id="5dbb">
+
+**22:35 · claude**
+
+> continue
+Verified all 10 improvements in Upgrade 2: instant Back to Vault navigation (~6ms via 48-card chunking), ~980 studio tracks with canonical album covers (verified Nirvana's Lithium on Nevermind), direct TrackCard playback, MiniPlayer EQ switcher, Spotify/YouTube/Apple Music links, World Tour Stops on posters, multi-stage Riff Tournament, the new /builder 10-track diagnostic page, and the new metal stage background. Marked Upgrade 2 as done in tasks.md.

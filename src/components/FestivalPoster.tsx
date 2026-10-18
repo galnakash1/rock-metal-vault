@@ -1,4 +1,5 @@
 import type { FestivalLineup, LineupAct, PosterTheme } from '../types/track'
+import { WORLD_TOUR_STOPS, formatTourDate, getTourYear } from '../utils/setlistUtils'
 import { formatDuration } from '../utils/trackUtils'
 
 export interface FestivalPosterProps {
@@ -7,11 +8,35 @@ export interface FestivalPosterProps {
   festivalName?: string
 }
 
+/** The poster bills acts by style only — the world tour below says where they play. */
 function ActMeta({ act }: { act: LineupAct }) {
+  return <span className="poster-act-meta">{act.subgenre}</span>
+}
+
+const pad = (value: number): string => String(value).padStart(2, '0')
+const toIsoDate = (year: number, month: number, day: number): string => `${year}-${pad(month + 1)}-${pad(day)}`
+
+/** "World Tour Dates & Venues": the festival grounds and arenas the lineup plays. */
+function WorldTour() {
+  const year = getTourYear(new Date())
   return (
-    <span className="poster-act-meta">
-      <span aria-hidden="true">{act.originFlag}</span> {act.originCountry} · {act.subgenre}
-    </span>
+    <section className="poster-tour" aria-labelledby="poster-tour-title">
+      <h3 className="poster-tour-title" id="poster-tour-title">
+        World Tour {year} · Dates &amp; Venues
+      </h3>
+      <ol className="poster-tour-list">
+        {WORLD_TOUR_STOPS.map((stop) => (
+          <li key={stop.venue} className="poster-tour-stop">
+            <time className="poster-tour-date" dateTime={toIsoDate(year, stop.month, stop.day)}>
+              {formatTourDate(stop)}
+            </time>
+            <span className="poster-tour-venue">
+              {stop.venue} <span className="poster-tour-place">· {stop.place}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -49,6 +74,8 @@ function FestivalPoster({ lineup, theme, festivalName = 'Vault Fest' }: Festival
           </ul>
         </section>
       )}
+
+      <WorldTour />
 
       <footer className="poster-footer">
         <dl className="poster-stats">

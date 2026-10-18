@@ -3,13 +3,16 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { fetchCatalog, getCachedCatalog } from './api/itunes'
 import MiniPlayer from './components/MiniPlayer'
 import Navbar from './components/Navbar'
+import StageBackdrop from './components/StageBackdrop'
 import ArenaPage from './pages/ArenaPage'
 import CatalogPage from './pages/CatalogPage'
 import NotFoundPage from './pages/NotFoundPage'
+import PlaylistBuilderPage from './pages/PlaylistBuilderPage'
 import SetlistPage from './pages/SetlistPage'
 import TrackDetailPage from './pages/TrackDetailPage'
 import type { FetchStatus, Track, TrackFilters } from './types/track'
 import {
+  addTracksToList,
   getBrowserStorage,
   loadSetlist,
   removeTrackFromList,
@@ -90,9 +93,13 @@ function App() {
     setSetlist((current) => removeTrackFromList(current, trackId))
   }, [])
   const clearSetlist = useCallback(() => setSetlist([]), [])
+  const addTracksToSetlist = useCallback((added: readonly Track[]) => {
+    setSetlist((current) => addTracksToList(current, added))
+  }, [])
 
   return (
     <BrowserRouter>
+      <StageBackdrop />
       <Navbar setlistCount={setlist.length} />
       <main className="app">
         <Routes>
@@ -146,6 +153,20 @@ function App() {
                 onRetry={handleRetry}
                 isInSetlist={isInSetlist}
                 onToggleSetlist={toggleSetlistTrack}
+              />
+            }
+          />
+          <Route
+            path="/builder"
+            element={
+              <PlaylistBuilderPage
+                tracks={tracks}
+                status={status}
+                error={error}
+                onRetry={handleRetry}
+                isInSetlist={isInSetlist}
+                onToggleSetlist={toggleSetlistTrack}
+                onAddAllToSetlist={addTracksToSetlist}
               />
             }
           />

@@ -19,14 +19,15 @@ Rock and metal fans who want to:
 
 ## 2a. Signature Features
 
-The app has exactly **four** signature features. To keep the UI clean and uncluttered, nothing beyond these four is added on top of the core catalog, detail, and setlist functionality.
+The app has **five** signature features. To keep the UI clean and uncluttered, nothing beyond these five is added on top of the core catalog, detail, and setlist functionality.
 
 | # | Feature | Page | In short |
 | --- | --- | --- | --- |
 | 1 | **Sonic Mood Capsules** | `/` | Mood filter pills above the track list, powered by a pure, unit-tested helper |
 | 2 | **Amp Console Player** | `/tracks/:id` | HTML5 + Web Audio API preview player with a live frequency-bar visualizer and Rock/Metal EQ presets |
-| 3 | **Festival Lineup & Poster Builder** | `/setlist` | Saved tracks become a festival poster with Headliners and a Main Stage underbill, origin flags, stats, and switchable themes |
-| 4 | **Riff Blind-Test Challenge** | `/arena` | Guess the track from its preview while blurred artwork slowly sharpens, with score and streak, plus a head-to-head comparison |
+| 3 | **Festival Lineup & Poster Builder** | `/setlist` | Saved tracks become a festival poster with Headliners, a Main Stage underbill, styles, World Tour dates & venues, stats, and switchable themes |
+| 4 | **Riff Blind-Test Tournament** | `/arena` | Guess the track from its preview while blurred artwork slowly sharpens, through 4 stages of rising difficulty, plus a head-to-head comparison |
+| 5 | **Playlist Builder (Sonic Diagnostic)** | `/builder` | 5 questions → a Metal Persona and a tailored 10-track playlist, from a pure, unit-tested scoring function |
 
 Supporting the features above are three **music-data enrichments**, which add data rather than extra UI:
 
@@ -56,12 +57,14 @@ Supporting the features above are three **music-data enrichments**, which add da
 https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
-- The catalog is built from **11 requests on a cold load**:
+- The catalog is built from **12 requests on a cold load**:
   - 3 broad searches (`rock`, `metal`, `metalcore`) for the mainstream;
-  - a **headliner tier**: 4 Lookup API calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=10`) fetching the top 10 songs of 37 flagship bands (Metallica, Iron Maiden, Black Sabbath, Slipknot, Bring Me The Horizon, Gojira, AC/DC, Nirvana…);
-  - a **spotlight tier**: 4 more lookups (`limit=5`) covering 56 other curated bands, mostly international (Israel, Sweden, Finland, Norway, Denmark, Iceland, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan…).
-  Results are merged and de-duplicated by `trackId` and by song, giving about 660 studio tracks from 19 countries and 30+ styles.
+  - a **deep tier**: 3 Lookup API calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=50`, 7 artist ids each) for 21 flagship bands (Meshuggah, Slipknot, Bring Me The Horizon, Metallica, Iron Maiden, Bad Omens, Architects, Nirvana, System Of A Down, Avenged Sevenfold, Gojira, Korn, Linkin Park, Opeth, Pantera, Slayer, Megadeth, Black Sabbath, AC/DC, Guns N' Roses, Rammstein). After filtering, each keeps **20–25 studio songs** (capped at 25 per band);
+  - a **headliner tier**: 2 lookups (`limit=10`) for 17 more headliners;
+  - a **spotlight tier**: 4 more lookups (`limit=5`) covering 55 other curated bands, mostly international (Israel, Sweden, Finland, Norway, Denmark, Iceland, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan…).
+  Results are merged and de-duplicated by `trackId` and by song, giving about 980 studio tracks from 19 countries and 30+ styles.
 - **Studio recordings only:** live versions, commentary, karaoke, interview and unplugged releases never enter the catalog.
+- **No compilations:** tracks from Greatest Hits, Best Of, Anthology, Essential, Icon, 20th Century Masters, Retrospective and The Singles collections (and soundtracks) are dropped. When a song appears on several albums, the **original (earliest) release** is kept, and every song from one studio album shows that album's original artwork (e.g. Nirvana's "Lithium" shows *Nevermind*).
 - **Fast loading:** tracks render as soon as the fastest request lands (progressive rendering), and later responses merge in. The finished catalog is cached in memory and in **`localStorage`** for 6 hours, so reloads and new tabs show it instantly with no requests.
 - **Rate-limit protection:** concurrent loads (e.g. React StrictMode's double mount) share one in-flight batch, and cached loads make no requests. **Retry** bypasses the cache. If some requests fail, the rest still load the catalog.
 - Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band — whatever Apple files the album under (Orphaned Land, Wardruna and KALEO may be "World", "Worldwide", or "Alternative"). iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
@@ -76,7 +79,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 ### a) `/` — Vault Catalog (Master List)
 
-- A grid of **track cards**. Each card shows artwork, track title, artist, album, origin flag, style, and duration, and has an add/remove-from-setlist button.
+- A grid of **track cards**. Each card shows artwork, track title, artist, album, origin flag, style, and duration, and has a **▶ play/pause button** (it queues the current filtered list starting at that card, with ⏮ / ⏭ in the players) and an add/remove-from-setlist button.
+- **Fast with ~1,000 tracks:** the grid renders the first 48 cards and reveals 48 more as you scroll near the end (an `IntersectionObserver` sentinel) or press **Show More Tracks**. Cards are memoized, and returning to `/` from another page commits in under 16 ms.
 - A **search input** that filters live (as you type) by track title, artist, album, style/subgenre, or origin country, ignoring case.
 - **Origin Country**, **Style/Subgenre**, and **Artist** filters (options come from the loaded data; Style replaces the coarse iTunes genre).
 - A **sort selector**: Title A–Z / Z–A, Artist A–Z, Newest / Oldest release, Shortest / Longest duration.
@@ -113,7 +117,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 - **Festival Poster** (signature feature 3): the saved tracks are grouped by artist into acts and shown as a stylized festival poster:
   - **Headliners:** the top acts (up to 3, about the top third), ranked by number of saved tracks, then by total runtime, then name. They get big display type at the top of the poster.
   - **Main Stage (underbill):** every other act, in smaller type below.
-  - Each act shows its **origin flag + country** and **style**.
+  - Each act shows its **style** (origin flags stay in the catalog, not on the poster).
+  - **World Tour Dates & Venues:** Donington Park · UK, Hellfest · Clisson, Ullevi · Gothenburg, Wacken · Germany, Red Rocks · USA, Expo Tel Aviv · Israel, Budokan · Tokyo, with dates for the upcoming tour year.
   - **Summary stats:** total tracks, bands, and total festival runtime (`h:mm:ss` / `mm:ss`).
   - **Poster theme switcher — 6 designs:**
     - `Hellfire Forge`: molten embers, a charred iron frame, fiery lettering.
@@ -123,32 +128,54 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
     - `Blood Moon`: a crimson eclipse, sharp metalcore styling.
     - `Vintage '70s Arena`: distressed parchment tour bill.
     The poster restyles instantly.
-- **Play the lineup:** a **▶ Play Full Festival Lineup** button queues the running order and plays the previews in order, advancing automatically. It pauses and resumes the lineup when it's already playing. Every running-order row has its own play/pause button and a **"Full Song on Apple Music ↗"** link (previews are 30 seconds). While a lineup plays, the mini-player and the Amp Console show ⏮ / ⏭ and the queue position ("Setlist 2 / 7").
+- **Play the lineup:** a **▶ Play Full Festival Lineup** button queues the running order and plays the previews in order, advancing automatically. It pauses and resumes the lineup when it's already playing. Every running-order row has its own play/pause button and full-song links to **Apple Music, Spotify and YouTube** (previews are 30 seconds). While a lineup plays, the mini-player and the Amp Console show ⏮ / ⏭ and the queue position ("Setlist 2 / 7").
 - **Running order:** the saved tracks in the order they were added, with artwork, formatted durations, links to `/tracks/:id`, and a **Remove** button each. A **Clear Lineup** button (with a confirmation step) empties it.
 - An empty state ("Your lineup is empty") links back to the catalog.
 - **Add to Setlist** buttons on every track card and on the detail page toggle a track in and out of the setlist without navigating away. Saved tracks open on `/tracks/:id` even when the catalog is still loading or the API is down.
 
 ### d) `/arena` — Riff Arena
 
-- **Riff Blind-Test Challenge** (signature feature 4):
-  - "Start the challenge" picks a random catalog track (avoiding the last 15 answers) and plays its 30-second preview through the app's player. The preview is **concealed**: the Now Playing bar stays hidden so it can't give the answer away.
-  - The album artwork starts at **`blur(24px)`** and **progressively unblurs to `blur(0px)`** over the 30-second preview. It is fully revealed once the user answers; until then its alt text doesn't name it.
-  - **4 multiple-choice buttons** ("Title" + artist): the correct track plus 3 **realistic decoys**, preferring the answer's style and country, all by different artists and with different titles, in random order.
-  - After a guess, the correct button turns green, a wrong pick turns red, and the answer is revealed with a link to its page. **Points reward speed** (1000 for an instant correct guess, down to 100 at the end of the preview; 0 when wrong).
-  - **Game loop — a set is 5 rounds with 3 lives (amp tubes):** the header shows "Round X of 5", the lit tubes, the set score, and the streak. A wrong guess, or letting the 30-second preview run out without a guess, blows a tube. The set ends in **victory** ("Set Complete!") after 5 rounds with a tube left, or **game over** ("Game Over — Amp Blown!") when the 3rd tube blows. On the final round the button reads **"See Final Results"** instead of "Next Riff".
-  - **Final Scoreboard:** the outcome banner and an earned **rank** (< 1,000 Garage Roadie · 1,000–2,499 Mosh Pit Regular · 2,500–3,999 Main Stage Shredder · ≥ 4,000 Immortal Riff God). It shows the **final set score out of 5,000**, accuracy ("4 / 5 correct"), best streak in the set, and the all-time **high score** and **best streak** (saved in `localStorage`, with "new record" badges). A **round-by-round recap** lists each track with ✅/❌, the points, a link to its page, and an Add to Setlist button. **"Play New Set"** starts over with 5 rounds and 3 lives.
-  - Leaving the arena, starting the next round, or opening the final results stops the hidden riff.
+- **Riff Blind-Test Tournament** (signature feature 4):
+  - "Start the Tournament" picks a random track from the current stage's pool (avoiding the last 15 answers) and plays its 30-second preview through the app's player. The preview is **concealed**: the Now Playing bar stays hidden so it can't give the answer away.
+  - The album artwork starts blurred (14px on stage 1, up to 32px on stage 4) and **progressively unblurs to `blur(0px)`** over the 30-second preview. It is fully revealed once the user answers; until then its alt text doesn't name it.
+  - **4 multiple-choice buttons** ("Title" + artist): the correct track plus 3 decoys, all by different artists and with different titles, in random order. Decoys get closer as stages get harder (random → similar style/country → same style and riff family).
+  - After a guess, the correct button turns green, a wrong pick turns red, and the answer is revealed with a link to its page. **Points reward speed** (1000 for an instant correct guess, down to 100 at the end of the preview; 0 when wrong), multiplied by the stage multiplier.
+  - **Tournament — 4 stages of 5 rounds, 3 lives (amp tubes) for the whole run:**
+
+    | Stage | Difficulty | Answer pool | Start blur | Decoys | Multiplier |
+    | --- | --- | --- | --- | --- | --- |
+    | 1 Mainstream Headliners | Easy | Metallica, Nirvana, AC/DC, Iron Maiden, Slipknot, Black Sabbath, Linkin Park, Guns N' Roses | 14px | random | ×1.0 |
+    | 2 Modern Heavyweights & Pit Icons | Medium | Bring Me The Horizon, Bad Omens, Architects, Korn, System Of A Down, Gojira, Rammstein, Pantera, Avenged Sevenfold | 22px | similar | ×1.5 |
+    | 3 Extreme, Progressive & Nordic | Hard | Meshuggah, Israeli bands, Nordic extreme/progressive/symphonic metal | 28px | same style | ×2.0 |
+    | 4 Global Underground & Deep Cuts | Elite | curated bands outside the flagship tiers | 32px | same style | ×2.5 |
+
+    The header shows the stage name, difficulty and multiplier badges, "Round X of 5", the lit tubes, the score, and the streak. A wrong guess, or letting the 30-second preview run out, blows a tube. After a stage's 5th round the button reads **"Stage X Cleared →"**, leading to a **"Stage X Cleared!"** screen (stage stats, lives carried over, one tube restored up to 3, the next stage's preview) with **"Advance to Stage X+1 →"**. Losing the last tube — even on a stage's 5th round — ends the run; clearing stage 4 conquers the tournament. The button then reads **"See Final Results"**.
+  - **Final Scoreboard:** a **"Tournament Conquered!"** or **"Game Over — Amp Blown!"** banner with the stage reached, and an earned **rank** (< 5,000 Garage Roadie · 5,000–11,999 Mosh Pit Regular · 12,000–21,999 Main Stage Shredder · ≥ 22,000 Immortal Riff God). It shows the **final score out of 35,000**, accuracy, best streak in the run, and the all-time **high score** and **best streak** (saved in `localStorage`, with "new record" badges). A **round-by-round recap** lists each round ("S2 · R3") with ✅/❌, the points, a link to the track's page, and an Add to Setlist button. **"Start a New Tournament"** starts over at stage 1 with 3 lives.
+  - Leaving the arena, starting the next round, opening a stage-cleared screen, or opening the final results stops the hidden riff.
 - **Head-to-Head Track Battle:** two **searchable** pickers (Track A vs Track B) let the user choose any two catalog tracks. Side-by-side cards show artwork, title, artist, origin flag and country, and style, with a **preview play button** and a **setlist toggle** each. A comparison table lists duration (the **longer** track is highlighted), release year (the **earlier, vintage** release is highlighted), style, origin, guitar tuning, and riff tempo (from the riff tab). Picking the same track twice is handled gracefully.
 
-### e) `*` — 404 Not Found
+### e) `/builder` — Playlist Builder
+
+- **Sonic Diagnostic** (signature feature 5): five questions, one at a time, with a progress bar and a Back button:
+  1. **Tempo & Energy:** slow & crushing · mid-tempo groove · fast & relentless
+  2. **Era & Guitar Tone:** 70s–80s tube amps · 90s–00s distortion · modern drop-tuned chug
+  3. **Mood & Atmosphere:** dark & ritual · aggressive & cathartic · epic & melodic · rock 'n' roll party
+  4. **Regional Scene:** American & British giants · Nordic & European · global & unexpected · anywhere loud
+  5. **Iconic vs. Deep Cuts:** iconic anthems · mix it up · deep cuts only
+- A pure, unit-tested scoring function (`src/utils/builderUtils.ts`) scores every catalog track on style, era, origin, catalog tier and length, then ranks them deterministically.
+- **Results:** a **Metal Persona** title and tagline (one of 12, from mood × tempo, e.g. "Black Metal Frost Wraith"), the answers as chips, and a **10-track playlist** (at most 2 songs per band) with runtime.
+- **Actions:** preview any song (row play buttons), **▶ Play All 10 Tracks** (a "Playlist" queue with ⏮ / ⏭), **⇄ Swap** a single track for the next-best match, per-track Add to Setlist, **Add All 10 to Festival Setlist**, full-song links (Apple Music, Spotify, YouTube), and **Re-run Diagnostic**.
+
+### f) `*` — 404 Not Found
 
 - Any unknown URL shows a themed "404 — This track doesn't exist" page with a link back to the Vault.
 
 ### Global layout
 
 - **Filters are remembered:** search, mood, country, style, artist and sort survive visiting a track, the setlist, or the arena and coming back.
-- **Now Playing mini-bar:** a preview keeps playing while you browse. When the playing track's detail page isn't open, a bottom bar shows its artwork, title, artist and flag, the EQ preset, play/pause, a link back to the Amp Console, and a stop button. Reopening the track's page picks up the same playback without restarting it.
-- A persistent **Navbar** on every page with links to **Vault Catalog** (`/`), **Festival Poster** (`/setlist`, with a live setlist count badge), and **Riff Arena** (`/arena`). The active route is highlighted with `NavLink`.
+- **Now Playing mini-bar:** a preview keeps playing while you browse. When the playing track's detail page isn't open, a bottom bar shows its artwork, title, artist and flag, an **EQ preset selector** (Flat, Metalcore Scoop, Classic Tube Amp, Bass Drop — a compact "EQ" pill on phones), play/pause, a link back to the Amp Console, and a stop button. Reopening the track's page picks up the same playback without restarting it.
+- A persistent **Navbar** on every page with links to **Vault Catalog** (`/`), **Festival Poster** (`/setlist`, with a live setlist count badge), **Riff Arena** (`/arena`), and **Playlist Builder** (`/builder`). The active route is highlighted with `NavLink`; on phones the four links form a 2×2 grid.
+- **Stage backdrop:** a fixed, decorative concert stage behind every page (diamond-plate floor, amp-grille mesh, swaying crimson and molten-amber light beams, a lightning strike, rising embers, a stage truss under the navbar), with slightly translucent panels on top. It animates only `transform`/`opacity` and stops for reduced motion.
 
 ## 6. Acceptance Criteria
 
@@ -165,11 +192,13 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 11. **When I** type "australia" or "thrash" into the search box, **I see** only tracks by Australian bands or with a Thrash Metal style.
 12. **When I** visit `/tracks/123` with an id that doesn't exist, **I see** a "Track not found" message and a link back to the Vault.
 13. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
-14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Main Stage acts below, origin flags and styles, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
+14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Main Stage acts below with their styles (no flags), a World Tour Dates & Venues section, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
 15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear Lineup", **I see** the poster and runtime update immediately.
-16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** green for the right answer (and red for my wrong pick), the points I earned for my speed, and the round counter, lives, score, and streak update. **When I** finish 5 rounds or lose my 3rd life, **I see** a final scoreboard with my rank, score out of 5,000, accuracy, records, and a recap of every track with Add to Setlist buttons.
+16. **When I** start the Riff Blind-Test Tournament in `/arena`, **I see** stage 1 (Easy, ×1.0) with blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** green for the right answer (and red for my wrong pick), the points I earned, and the round counter, lives, score, and streak update. **When I** finish a stage's 5th round with a tube left, **I see** "Stage 1 Cleared!" with my lives carried over (+1, max 3) and an "Advance to Stage 2 →" button; stage 2 is Medium (×1.5) with heavier blur. **When I** lose my last tube or conquer stage 4, **I see** a final scoreboard with the stage reached, my rank, score out of 35,000, accuracy, records, and a recap of every round.
 17. **When I** pick two tracks in the Head-to-Head section, **I see** them side by side with origin, style, duration, release year, tuning, and tempo, with the longer track and the earlier release highlighted.
-18. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
+18a. **When I** answer the 5 Sonic Diagnostic questions on `/builder`, **I see** a Metal Persona and a 10-track playlist with at most 2 songs per band. **When I** press ⇄ Swap on a row, **I see** only that row change; **When I** press "Add All 10 to Festival Setlist", **I see** the Navbar count go up by the number of new tracks.
+18b. **When I** press ▶ on a catalog card, **I see** it switch to ❚❚ and the mini-player show "Catalog 3 / N" with an EQ selector I can change.
+18c. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
 19. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
 
 ## 7. Non-Functional Requirements

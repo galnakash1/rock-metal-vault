@@ -1,5 +1,9 @@
 import type { ITunesTrackRaw, Track } from '../types/track'
-import { HEADLINER_ARTIST_IDS, SPOTLIGHT_ARTIST_IDS } from '../utils/artistMetadata'
+import {
+  DEEP_CATALOG_ARTIST_IDS,
+  HEADLINER_ARTIST_IDS,
+  SPOTLIGHT_ARTIST_IDS,
+} from '../utils/artistMetadata'
 import {
   CATALOG_CACHE_KEY,
   mergeCatalogTracks,
@@ -10,13 +14,16 @@ import { getBrowserStorage } from '../utils/setlistUtils'
 import { isVaultTrack, normalizeTracks, parseSearchResults } from '../utils/trackUtils'
 
 // ---------- Request plan ----------
-// Apple allows roughly 20 requests per minute. A cold catalog load makes 11 requests (and the
+// Apple allows roughly 20 requests per minute. A cold catalog load makes 12 requests (and the
 // 6-hour localStorage cache means most loads make none), all in parallel:
 // - 3 broad searches for the mainstream;
-// - 4 headliner lookups: the top 10 songs of each flagship band (Metallica, Iron Maiden, Slipknot,
-//   Bring Me The Horizon…), by Apple artist id — live versions are filtered out afterwards;
+// - 3 deep lookups: the top 50 songs of 21 flagship bands (Metallica, Slipknot, Meshuggah…) —
+//   about half are live, compilation or duplicate versions, so after filtering each band keeps
+//   20–25 studio songs (the merge caps every artist at 25);
+// - 2 headliner lookups: the top 10 songs of the other flagship bands;
 // - 4 spotlight lookups: 5 songs from every other curated band (Israel, Scandinavia, Japan…).
-// Uncached lookups slow down sharply with more ids (61 ids: ~5–12 s), hence the small chunks.
+// Live, compilation and duplicate versions are filtered out afterwards. Uncached lookups slow down
+// sharply with more ids × songs, hence the small chunks (7 × 50 songs ≈ 3.5–4.5 s).
 
 const SEARCH_URL = 'https://itunes.apple.com/search'
 const LOOKUP_URL = 'https://itunes.apple.com/lookup'
@@ -24,6 +31,7 @@ const SEARCH_TERMS = ['rock', 'metal', 'metalcore'] as const
 const RESULTS_PER_TERM = 50
 // The Lookup API applies `limit` per artist. Chunk sizes keep each uncached lookup ~2–5 s.
 export const LOOKUP_TIERS = {
+  deep: { songsPerArtist: 50, idsPerLookup: 7 },
   headliner: { songsPerArtist: 10, idsPerLookup: 12 },
   spotlight: { songsPerArtist: 5, idsPerLookup: 16 },
 } as const
@@ -61,6 +69,7 @@ export function buildLookupUrls(
 export function getCatalogRequestUrls(): string[] {
   return [
     ...SEARCH_TERMS.map(buildSearchUrl),
+    ...buildLookupUrls(DEEP_CATALOG_ARTIST_IDS, LOOKUP_TIERS.deep),
     ...buildLookupUrls(HEADLINER_ARTIST_IDS, LOOKUP_TIERS.headliner),
     ...buildLookupUrls(SPOTLIGHT_ARTIST_IDS, LOOKUP_TIERS.spotlight),
   ]

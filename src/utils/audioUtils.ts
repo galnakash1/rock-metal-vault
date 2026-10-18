@@ -17,6 +17,11 @@ export const EQ_PRESET_IDS: readonly EqPresetId[] = [
   'bass-drop',
 ]
 
+/** Narrows a string (e.g. a <select> value) to a known EQ preset id. */
+export function isEqPresetId(value: string): value is EqPresetId {
+  return (EQ_PRESET_IDS as readonly string[]).includes(value)
+}
+
 export const EQ_PRESETS: Record<EqPresetId, EqPreset> = {
   flat: {
     id: 'flat',

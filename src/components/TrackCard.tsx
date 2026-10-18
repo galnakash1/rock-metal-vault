@@ -1,18 +1,27 @@
-import type { ReactNode } from 'react'
+import { memo } from 'react'
 import { Link } from 'react-router-dom'
 import type { Track } from '../types/track'
 import { formatDuration, upgradeArtworkUrl } from '../utils/trackUtils'
+import CardPlayButton from './CardPlayButton'
+import SetlistButton from './SetlistButton'
 
 export interface TrackCardProps {
   track: Track
-  /** Extra controls rendered outside the card link (e.g. the Task 6 setlist toggle). */
-  actions?: ReactNode
+  inSetlist: boolean
+  /** Must be stable (useCallback) so memoized cards skip re-rendering. */
+  onToggleSetlist: (track: Track) => void
+  /** Must be stable too: starts the preview queue at this track. */
+  onPlay: (track: Track) => void
 }
 
 // Sharp on high-density screens at card size, and much lighter than the 600px detail art.
 const CARD_ART_SIZE = 300
 
-function TrackCard({ track, actions }: TrackCardProps) {
+/**
+ * One catalog card. Memoized: with stable callbacks it only re-renders when its own track or
+ * setlist state changes, which keeps returning to a large catalog fast.
+ */
+function TrackCard({ track, inSetlist, onToggleSetlist, onPlay }: TrackCardProps) {
   return (
     <article className="track-card">
       <Link to={`/tracks/${track.id}`} className="track-card-link">
@@ -44,9 +53,17 @@ function TrackCard({ track, actions }: TrackCardProps) {
           </div>
         </div>
       </Link>
-      {actions && <div className="track-card-actions">{actions}</div>}
+      <div className="track-card-actions">
+        <CardPlayButton track={track} onPlay={onPlay} />
+        <SetlistButton
+          variant="compact"
+          trackTitle={track.title}
+          inSetlist={inSetlist}
+          onToggle={() => onToggleSetlist(track)}
+        />
+      </div>
     </article>
   )
 }
 
-export default TrackCard
+export default memo(TrackCard)

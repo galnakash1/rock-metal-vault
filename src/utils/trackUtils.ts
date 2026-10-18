@@ -112,6 +112,18 @@ const NON_STUDIO_PATTERNS: readonly RegExp[] = [
 ]
 
 /**
+ * Greatest-hits, best-of and soundtrack releases. Apple often lists a band's hits on these, with a
+ * different cover than the original studio album, so they're kept out of the catalog.
+ */
+const COMPILATION_PATTERN =
+  /\b(?:greatest hits|best of|anthology|essential|icon|20th century masters|retrospective|the singles|b-sides|soundtrack|motion picture)\b/i
+
+/** True when an album name marks a compilation (e.g. "Greatest Hits, Vol. 1", "The Essential Korn"). */
+export function isCompilationAlbum(collectionName = ''): boolean {
+  return COMPILATION_PATTERN.test(collectionName)
+}
+
+/**
  * True only for studio recordings: the track title and its album must not mark a live, commentary,
  * karaoke, interview or unplugged version.
  */
@@ -126,11 +138,13 @@ export function isStudioRecording(trackName: string, collectionName = ''): boole
 /**
  * Maps a raw iTunes result to the app's Track model and enriches it with the band's
  * origin country/flag and style. Returns null for non-track results, for tracks without a
- * preview (every track in the Vault must be playable), and for live or other non-studio versions.
+ * preview (every track in the Vault must be playable), for live or other non-studio versions,
+ * and for compilation albums.
  */
 export function normalizeTrack(raw: ITunesTrackRaw): Track | null {
   if (raw.wrapperType !== 'track' || !raw.previewUrl) return null
   if (!isStudioRecording(raw.trackName, raw.collectionName)) return null
+  if (isCompilationAlbum(raw.collectionName)) return null
 
   const artistId = raw.artistId ?? null
   const { originCountry, subgenre } = getArtistMetadata(
@@ -307,8 +321,10 @@ export function filterTracks(tracks: Track[], filters: Omit<TrackFilters, 'sort'
   })
 }
 
-const compareText = (a: string, b: string): number =>
-  a.localeCompare(b, undefined, { sensitivity: 'base' })
+// One shared collator: `localeCompare(b, locale, options)` builds a new one on every call, which
+// made sorting ~1,000 tracks the slowest part of returning to the catalog. Same ordering.
+const textCollator = new Intl.Collator(undefined, { sensitivity: 'base' })
+const compareText = (a: string, b: string): number => textCollator.compare(a, b)
 
 const toTimestamp = (isoDate: string): number => {
   const time = Date.parse(isoDate)

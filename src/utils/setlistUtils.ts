@@ -11,6 +11,17 @@ export function toggleTrackInList(list: readonly Track[], track: Track): Track[]
     : [...list, track]
 }
 
+/** Appends every track that isn't saved yet (e.g. "Add All 10 to Festival Setlist"), in order. */
+export function addTracksToList(list: readonly Track[], tracks: readonly Track[]): Track[] {
+  const ids = new Set(list.map((track) => track.id))
+  const added = tracks.filter((track) => {
+    if (ids.has(track.id)) return false
+    ids.add(track.id)
+    return true
+  })
+  return added.length === 0 ? [...list] : [...list, ...added]
+}
+
 /** Removes one track by id; the rest keep their running order. */
 export function removeTrackFromList(list: readonly Track[], trackId: number): Track[] {
   return list.filter((track) => track.id !== trackId)
@@ -134,6 +145,42 @@ export function saveSetlist(storage: Pick<Storage, 'setItem'> | null, tracks: re
 
 /** Queue label for the festival lineup ("Setlist 2 / 7" in the players). */
 export const SETLIST_QUEUE_LABEL = 'Setlist'
+
+// ---------- World tour (festival poster) ----------
+
+export interface TourStop {
+  month: number // 0–11
+  day: number
+  venue: string // "Donington Park"
+  place: string // "UK"
+}
+
+/** The poster's world tour: iconic rock & metal festival grounds and arenas, in date order. */
+export const WORLD_TOUR_STOPS: readonly TourStop[] = [
+  { month: 5, day: 12, venue: 'Donington Park', place: 'UK' },
+  { month: 5, day: 19, venue: 'Hellfest', place: 'Clisson' },
+  { month: 6, day: 3, venue: 'Ullevi', place: 'Gothenburg' },
+  { month: 6, day: 31, venue: 'Wacken', place: 'Germany' },
+  { month: 7, day: 22, venue: 'Red Rocks', place: 'USA' },
+  { month: 8, day: 10, venue: 'Expo Tel Aviv', place: 'Israel' },
+  { month: 9, day: 2, venue: 'Budokan', place: 'Tokyo' },
+]
+
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+/** "JUN 12" — locale-independent, so the poster reads the same everywhere. */
+export function formatTourDate(stop: Pick<TourStop, 'month' | 'day'>): string {
+  return `${MONTHS[stop.month] ?? ''} ${String(stop.day).padStart(2, '0')}`.trim()
+}
+
+/** The upcoming tour year: this year until the last show has passed, then next year. */
+export function getTourYear(now: Date): number {
+  const year = now.getFullYear()
+  const last = WORLD_TOUR_STOPS.at(-1)
+  if (!last) return year
+  const lastShow = new Date(year, last.month, last.day, 23, 59, 59)
+  return now > lastShow ? year + 1 : year
+}
 
 // ---------- Festival poster ----------
 

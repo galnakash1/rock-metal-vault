@@ -269,20 +269,40 @@ export const HEADLINER_ARTISTS: readonly string[] = [
   'Led Zeppelin', 'Deep Purple', 'Nirvana', 'Alice In Chains', 'Soundgarden', 'Foo Fighters',
 ]
 
+/** The flagship bands fetched deepest of all: up to 25 studio tracks each. */
+export const DEEP_CATALOG_ARTISTS: readonly string[] = [
+  'Meshuggah', 'Slipknot', 'Bring Me The Horizon', 'Metallica', 'Iron Maiden', 'Bad Omens',
+  'Architects', 'Nirvana', 'System Of A Down', 'Avenged Sevenfold', 'Gojira', 'Korn',
+  'Linkin Park', 'Opeth', 'Pantera', 'Slayer', 'Megadeth', 'Black Sabbath', 'AC/DC',
+  "Guns N' Roses", 'Rammstein',
+]
+
+/** How deep the catalog fetches a curated band (each band is in exactly one tier). */
+export type CatalogTier = 'deep' | 'headliner' | 'spotlight'
+
+const DEEP_KEYS: ReadonlySet<string> = new Set(DEEP_CATALOG_ARTISTS.map(normalizeArtistKey))
 const HEADLINER_KEYS: ReadonlySet<string> = new Set(HEADLINER_ARTISTS.map(normalizeArtistKey))
 
-const idsWhere = (isHeadliner: boolean): number[] =>
+export function getCatalogTier(artistName: string): CatalogTier {
+  const key = normalizeArtistKey(artistName)
+  if (DEEP_KEYS.has(key)) return 'deep'
+  if (HEADLINER_KEYS.has(key)) return 'headliner'
+  return 'spotlight'
+}
+
+const idsInTier = (tier: CatalogTier): number[] =>
   ARTIST_ENTRIES.flatMap(([name, , , itunesArtistId]) =>
-    itunesArtistId !== undefined && HEADLINER_KEYS.has(normalizeArtistKey(name)) === isHeadliner
-      ? [itunesArtistId]
-      : [],
+    itunesArtistId !== undefined && getCatalogTier(name) === tier ? [itunesArtistId] : [],
   )
 
-/** Apple artist ids of the flagship bands (fetched in depth with the Lookup API). */
-export const HEADLINER_ARTIST_IDS: readonly number[] = idsWhere(true)
+/** Apple artist ids of the deep-catalog bands (up to 25 studio tracks each). */
+export const DEEP_CATALOG_ARTIST_IDS: readonly number[] = idsInTier('deep')
+
+/** Apple artist ids of the other flagship bands (fetched in depth with the Lookup API). */
+export const HEADLINER_ARTIST_IDS: readonly number[] = idsInTier('headliner')
 
 /** Apple artist ids of the other curated bands — mostly the international scene (smaller sample). */
-export const SPOTLIGHT_ARTIST_IDS: readonly number[] = idsWhere(false)
+export const SPOTLIGHT_ARTIST_IDS: readonly number[] = idsInTier('spotlight')
 
 // Splits "Bad Omens, Let's Eat Grandma & Chief" / "X feat. Y" into the lead artist.
 const COLLABORATION_SEPARATOR = /\s*(?:,|&|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i

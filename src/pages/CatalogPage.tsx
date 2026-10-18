@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { playQueue } from '../audio/playerEngine'
 import FilterBar from '../components/FilterBar'
-import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
 import TrackCard from '../components/TrackCard'
 import type { FetchStatus, Track, TrackFilters } from '../types/track'
@@ -29,6 +29,21 @@ export interface CatalogPageProps {
   isLoadingMore: boolean
 }
 
+/** Cards rendered at first, and added per reveal — keeps mounting the catalog well under a frame. */
+export const CATALOG_PAGE_SIZE = 48
+export const CATALOG_QUEUE_LABEL = 'Catalog'
+
+// The last filtered + sorted result. App keeps `tracks` and `filters` referentially stable across
+// routes, so coming back to "/" reuses it instead of re-sorting ~1,000 tracks.
+let lastVisible: { tracks: Track[]; filters: TrackFilters; result: Track[] } | null = null
+
+function getVisibleTracks(tracks: Track[], filters: TrackFilters): Track[] {
+  if (lastVisible?.tracks === tracks && lastVisible.filters === filters) return lastVisible.result
+  const result = sortTracks(filterTracks(tracks, filters), filters.sort)
+  lastVisible = { tracks, filters, result }
+  return result
+}
+
 function CatalogPage({
   tracks,
   status,
@@ -41,10 +56,7 @@ function CatalogPage({
   isLoadingMore,
 }: CatalogPageProps) {
   // Everything below is derived from tracks + filters — never stored in state.
-  const visibleTracks = useMemo(
-    () => sortTracks(filterTracks(tracks, filters), filters.sort),
-    [tracks, filters],
-  )
+  const visibleTracks = useMemo(() => getVisibleTracks(tracks, filters), [tracks, filters])
   const options = useMemo(
     () => ({
       countries: getUniqueCountries(tracks),
@@ -52,6 +64,41 @@ function CatalogPage({
       artists: getUniqueArtists(tracks),
     }),
     [tracks],
+  )
+
+  // Progressive reveal: the count belongs to one filter result, so new filters start at 48 again
+  // (derived during render — no effect needed to reset it).
+  const [reveal, setReveal] = useState({ filters, count: CATALOG_PAGE_SIZE })
+  const revealCount = reveal.filters === filters ? reveal.count : CATALOG_PAGE_SIZE
+  const renderedTracks = useMemo(() => visibleTracks.slice(0, revealCount), [visibleTracks, revealCount])
+  const hasMore = revealCount < visibleTracks.length
+  const showMore = useCallback(
+    () => setReveal({ filters, count: revealCount + CATALOG_PAGE_SIZE }),
+    [filters, revealCount],
+  )
+
+  // Reveal the next chunk as the end of the grid scrolls near (the button is the fallback).
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel || !hasMore || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) showMore()
+      },
+      { rootMargin: '600px 0px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, showMore])
+
+  // Stable for memoized cards: a card's ▶ queues the whole filtered list, starting at that card.
+  const playFromCard = useCallback(
+    (track: Track) => {
+      const index = visibleTracks.findIndex((item) => item.id === track.id)
+      void playQueue(visibleTracks, Math.max(index, 0), CATALOG_QUEUE_LABEL)
+    },
+    [visibleTracks],
   )
 
   const resetFilters = () => onFiltersChange(DEFAULT_FILTERS)
@@ -112,23 +159,30 @@ function CatalogPage({
               retryLabel="Reset filters"
             />
           ) : (
-            <ul className="track-grid">
-              {visibleTracks.map((track) => (
-                <li key={track.id}>
-                  <TrackCard
-                    track={track}
-                    actions={
-                      <SetlistButton
-                        variant="compact"
-                        trackTitle={track.title}
-                        inSetlist={isInSetlist(track.id)}
-                        onToggle={() => onToggleSetlist(track)}
-                      />
-                    }
-                  />
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="track-grid">
+                {renderedTracks.map((track) => (
+                  <li key={track.id}>
+                    <TrackCard
+                      track={track}
+                      inSetlist={isInSetlist(track.id)}
+                      onToggleSetlist={onToggleSetlist}
+                      onPlay={playFromCard}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {hasMore && (
+                <div className="catalog-more" ref={sentinelRef}>
+                  <p className="catalog-more-count">
+                    Showing {renderedTracks.length} of {visibleTracks.length} tracks
+                  </p>
+                  <button type="button" className="button" onClick={showMore}>
+                    Show More Tracks
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

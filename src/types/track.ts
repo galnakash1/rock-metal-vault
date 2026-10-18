@@ -207,20 +207,27 @@ export type RoundOutcome = 'correct' | 'wrong' | 'timeout'
 export interface RoundResult {
   track: Track // the round's answer
   outcome: RoundOutcome
-  points: number
+  points: number // already multiplied by the stage's points multiplier
+  stage: number // tournament stage the round was played in (1-based)
 }
 
-/** A set is 5 rounds and 3 lives: 'victory' = all rounds played with a life left. */
-export type SetStatus = 'playing' | 'victory' | 'game-over'
+/** A tournament run: 'conquered' = cleared the final stage; 'game-over' = lost the last life. */
+export type TournamentStatus = 'playing' | 'conquered' | 'game-over'
 
-export interface BlindTestSetSummary {
-  score: number // out of 5,000
+/** Everything the tournament scoreboard shows, derived from the round results (never stored). */
+export interface TournamentSummary {
+  score: number
   played: number
   correct: number
   livesLeft: number
   currentStreak: number
-  bestStreak: number // longest run of correct guesses in this set
-  status: SetStatus
+  bestStreak: number // longest run of correct guesses in this run
+  stage: number // the stage being played (or the last one, once the run is over)
+  roundInStage: number // rounds completed in that stage
+  stagesCleared: number
+  justClearedStage: number | null // set right after the round that cleared a stage
+  restoredLife: boolean // that clear restored a life (false when already at the max)
+  status: TournamentStatus
 }
 
 /** All-time records, persisted in localStorage. */

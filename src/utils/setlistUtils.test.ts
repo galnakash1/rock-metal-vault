@@ -5,8 +5,12 @@ import {
   POSTER_THEMES,
   SETLIST_QUEUE_LABEL,
   SETLIST_STORAGE_KEY,
+  WORLD_TOUR_STOPS,
+  addTracksToList,
   buildFestivalLineup,
+  formatTourDate,
   getHeadlinerCount,
+  getTourYear,
   loadSetlist,
   parseStoredSetlist,
   removeTrackFromList,
@@ -67,6 +71,21 @@ describe('toggleTrackInList & removeTrackFromList', () => {
     const start = [byTitle('Paranoid'), byTitle('Doomsday'), byTitle('Throne')]
     expect(titles(removeTrackFromList(start, byTitle('Doomsday').id))).toEqual(['Paranoid', 'Throne'])
     expect(removeTrackFromList(start, 123)).toEqual(start)
+  })
+})
+
+describe('addTracksToList ("Add All 10 to Festival Setlist")', () => {
+  it('appends every new track in order and skips ones already saved', () => {
+    const start = [byTitle('Paranoid')]
+    const added = addTracksToList(start, [byTitle('Doomsday'), byTitle('Paranoid'), byTitle('Throne')])
+    expect(titles(added)).toEqual(['Paranoid', 'Doomsday', 'Throne'])
+    expect(titles(start)).toEqual(['Paranoid'])
+  })
+
+  it('ignores duplicates inside the added list and handles empty input', () => {
+    const track = byTitle('Throne')
+    expect(titles(addTracksToList([], [track, track]))).toEqual(['Throne'])
+    expect(addTracksToList([track], [])).toEqual([track])
   })
 })
 
@@ -203,6 +222,33 @@ describe('POSTER_THEMES', () => {
   it('gives every theme a unique id and a description', () => {
     expect(new Set(POSTER_THEMES.map((theme) => theme.id)).size).toBe(POSTER_THEMES.length)
     for (const theme of POSTER_THEMES) expect(theme.description.length).toBeGreaterThan(10)
+  })
+})
+
+describe('world tour (poster)', () => {
+  it('lists the 7 venues in date order', () => {
+    expect(WORLD_TOUR_STOPS.map((stop) => `${stop.venue} · ${stop.place}`)).toEqual([
+      'Donington Park · UK',
+      'Hellfest · Clisson',
+      'Ullevi · Gothenburg',
+      'Wacken · Germany',
+      'Red Rocks · USA',
+      'Expo Tel Aviv · Israel',
+      'Budokan · Tokyo',
+    ])
+    const order = WORLD_TOUR_STOPS.map((stop) => stop.month * 100 + stop.day)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+  })
+
+  it('formats dates without depending on the locale', () => {
+    expect(formatTourDate({ month: 5, day: 12 })).toBe('JUN 12')
+    expect(formatTourDate({ month: 9, day: 2 })).toBe('OCT 02')
+  })
+
+  it('plays this year until the last show, then next year', () => {
+    expect(getTourYear(new Date(2026, 0, 15))).toBe(2026)
+    expect(getTourYear(new Date(2026, 9, 2, 20))).toBe(2026)
+    expect(getTourYear(new Date(2026, 9, 3))).toBe(2027)
   })
 })
 

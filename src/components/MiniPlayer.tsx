@@ -1,7 +1,13 @@
 import { Link, useLocation } from 'react-router-dom'
-import { nextTrack, previousTrack, stop, togglePlay } from '../audio/playerEngine'
+import { nextTrack, previousTrack, setPreset, stop, togglePlay } from '../audio/playerEngine'
 import { usePlayer } from '../hooks/usePlayer'
-import { EQ_PRESETS, formatQueuePosition, shouldShowMiniPlayer } from '../utils/audioUtils'
+import {
+  EQ_PRESETS,
+  EQ_PRESET_IDS,
+  formatQueuePosition,
+  isEqPresetId,
+  shouldShowMiniPlayer,
+} from '../utils/audioUtils'
 import { formatDuration } from '../utils/trackUtils'
 
 /**
@@ -49,9 +55,26 @@ function MiniPlayer() {
             {queuePosition}
           </span>
         )}
-        <span className="mini-player-eq" title="Current EQ preset">
-          EQ · {EQ_PRESETS[player.presetId].label}
-        </span>
+        <label className="mini-player-eq" title={EQ_PRESETS[player.presetId].description}>
+          <span className="mini-player-eq-label" aria-hidden="true">
+            EQ
+          </span>
+          <select
+            className="mini-player-eq-select"
+            aria-label="EQ preset"
+            value={player.presetId}
+            disabled={player.engine === 'unavailable'}
+            onChange={(event) => {
+              if (isEqPresetId(event.target.value)) setPreset(event.target.value)
+            }}
+          >
+            {EQ_PRESET_IDS.map((id) => (
+              <option key={id} value={id}>
+                {EQ_PRESETS[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="mini-player-time">
           {formatDuration(player.currentTime * 1000)} / {formatDuration(player.duration * 1000)}
         </span>

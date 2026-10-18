@@ -8,3 +8,14 @@ import { getSnapshot, subscribe, type PlayerSnapshot } from '../audio/playerEngi
 export function usePlayer(): PlayerSnapshot {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
+
+/**
+ * Subscribes to one derived value of the player (e.g. "is this card's track playing?"). The
+ * component re-renders only when that value changes, so return a primitive — not a new object.
+ */
+export function usePlayerSelector<T extends string | number | boolean | null>(
+  selector: (snapshot: PlayerSnapshot) => T,
+): T {
+  const select = () => selector(getSnapshot())
+  return useSyncExternalStore(subscribe, select, select)
+}

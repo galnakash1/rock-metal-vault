@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import AppleMusicLink from '../components/AppleMusicLink'
+import StreamingLinks from '../components/StreamingLinks'
 import FestivalPoster from '../components/FestivalPoster'
 import { LineupPlayButton, RowPlayButton } from '../components/LineupPlayback'
 import StatusMessage from '../components/StatusMessage'
@@ -98,7 +98,7 @@ function SetlistPage({ setlist, onRemove, onClear }: SetlistPageProps) {
                       {track.artist} · <span aria-hidden="true">{track.originFlag}</span>{' '}
                       {track.subgenre}
                     </span>
-                    <AppleMusicLink track={track} variant="compact" />
+                    <StreamingLinks track={track} variant="compact" />
                   </div>
                   <span className="running-order-duration">{formatDuration(track.durationMs)}</span>
                   <button

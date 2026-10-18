@@ -3,6 +3,9 @@ import mockData from '../data/mockTracks.json'
 import {
   CATALOG_CACHE_KEY,
   CATALOG_CACHE_TTL_MS,
+  MAX_SONGS_PER_ARTIST,
+  canonicalizeAlbumArtwork,
+  capTracksPerArtist,
   dedupeSongs,
   mergeCatalogTracks,
   parseCatalogCache,
@@ -13,9 +16,13 @@ import { normalizeTracks, parseSearchResults } from './trackUtils'
 const tracks = normalizeTracks(parseSearchResults(mockData))
 const NOW = 1_800_000_000_000
 
+const [fixtureTrack] = tracks
+if (!fixtureTrack) throw new Error('fixture is empty')
+const lithium = { ...fixtureTrack, title: 'Lithium', artist: 'Nirvana' }
+
 describe('catalog localStorage cache', () => {
   it('uses a versioned key and a multi-hour TTL', () => {
-    expect(CATALOG_CACHE_KEY).toBe('rmv:catalog:v4')
+    expect(CATALOG_CACHE_KEY).toBe('rmv:catalog:v5')
     expect(CATALOG_CACHE_TTL_MS).toBe(6 * 60 * 60 * 1000)
   })
 
@@ -91,5 +98,103 @@ describe('dedupeSongs', () => {
     if (!first) throw new Error('fixture too small')
     const sameSong = { ...first, id: 4242 }
     expect(mergeCatalogTracks([first], [sameSong])).toEqual([first])
+  })
+
+  it('keeps the original release when a later compilation copy arrives first (the "Lithium" fix)', () => {
+    const studio = {
+      ...lithium,
+      id: 1,
+      album: 'Nevermind',
+      releaseDate: '1991-09-24T07:00:00Z',
+      artworkUrl: 'https://example.com/nevermind/100x100bb.jpg',
+    }
+    const selfTitledBestOf = {
+      ...lithium,
+      id: 2,
+      album: 'Nirvana',
+      releaseDate: '2002-10-29T08:00:00Z',
+      artworkUrl: 'https://example.com/nirvana-2002/100x100bb.jpg',
+    }
+    const other = { ...lithium, id: 3, title: 'Come as You Are' }
+    const result = dedupeSongs([selfTitledBestOf, other, studio])
+    // The studio copy takes the compilation's place, so the grid order stays put.
+    expect(result.map((track) => track.id)).toEqual([1, 3])
+    expect(result[0]?.album).toBe('Nevermind')
+  })
+})
+
+
+describe('capTracksPerArtist', () => {
+  const songs = (artist: string, count: number, firstId: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      ...fixtureTrack,
+      id: firstId + index,
+      artist,
+      title: `${artist} song ${firstId + index}`,
+    }))
+
+  it('keeps the first 25 songs of each lead artist, in order', () => {
+    const metallica = songs('Metallica', 40, 1000)
+    const korn = songs('Korn', 22, 2000)
+    const capped = capTracksPerArtist([...metallica, ...korn])
+    expect(MAX_SONGS_PER_ARTIST).toBe(25)
+    expect(capped.filter((track) => track.artist === 'Metallica').map((track) => track.id)).toEqual(
+      metallica.slice(0, 25).map((track) => track.id),
+    )
+    expect(capped.filter((track) => track.artist === 'Korn')).toHaveLength(22)
+  })
+
+  it('counts collaborations toward the lead artist, and is applied on every merge', () => {
+    const lp = [...songs('LINKIN PARK', 24, 3000), ...songs('Linkin Park & Guest', 3, 4000)]
+    expect(capTracksPerArtist(lp)).toHaveLength(25)
+    expect(mergeCatalogTracks(songs('Slayer', 20, 5000), songs('Slayer', 20, 6000))).toHaveLength(25)
+  })
+})
+
+describe('canonicalizeAlbumArtwork', () => {
+  const studioTrack = {
+    ...lithium,
+    id: 10,
+    album: 'Nevermind',
+    releaseDate: '1991-09-24T07:00:00Z',
+    artworkUrl: 'https://example.com/original/100x100bb.jpg',
+    artworkUrlLarge: 'https://example.com/original/600x600bb.jpg',
+  }
+  const deluxeTrack = {
+    ...lithium,
+    id: 11,
+    title: 'In Bloom',
+    album: 'Nevermind (Deluxe Edition)',
+    releaseDate: '2011-09-23T07:00:00Z',
+    artworkUrl: 'https://example.com/deluxe/100x100bb.jpg',
+    artworkUrlLarge: 'https://example.com/deluxe/600x600bb.jpg',
+  }
+
+  it('gives every song of one studio album the cover of its earliest release', () => {
+    const [first, second] = canonicalizeAlbumArtwork([deluxeTrack, studioTrack])
+    expect(first).toMatchObject({
+      id: 11,
+      title: 'In Bloom',
+      album: 'Nevermind',
+      artworkUrl: studioTrack.artworkUrl,
+      artworkUrlLarge: studioTrack.artworkUrlLarge,
+    })
+    expect(second).toBe(studioTrack) // already canonical: same object, no copy
+  })
+
+  it('leaves other albums and other artists alone, without mutating the input', () => {
+    const otherAlbum = { ...deluxeTrack, id: 12, album: 'In Utero', artworkUrl: 'https://example.com/utero.jpg' }
+    const otherArtist = { ...deluxeTrack, id: 13, artist: 'Nevermind Tribute Band' }
+    const input = [studioTrack, otherAlbum, otherArtist]
+    const snapshot = structuredClone(input)
+    const result = canonicalizeAlbumArtwork(input)
+    expect(result[1]).toBe(otherAlbum)
+    expect(result[2]).toBe(otherArtist)
+    expect(input).toEqual(snapshot)
+  })
+
+  it('runs as part of every progressive merge', () => {
+    const merged = mergeCatalogTracks([deluxeTrack], [studioTrack])
+    expect(new Set(merged.map((track) => track.artworkUrl))).toEqual(new Set([studioTrack.artworkUrl]))
   })
 })

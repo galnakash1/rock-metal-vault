@@ -197,3 +197,22 @@
   3. Heavier stage aesthetic: a fixed amp-grille / carbon / crimson-smoke background with a vignette, chrome titles, bevelled buttons, and corner brackets.
   4. Six poster themes: Hellfire Forge, Catacomb Black, Thrash Pit '86, Foggy Woodland, Blood Moon, Vintage '70s Arena.
 - **Done when:** the live catalog loads about 660 studio tracks with zero live versions or duplicate songs; the lineup plays, advances with ⏭ and at the end of each preview, and shows its queue position; all six themes render at 375px with no overflow; the console stays clean; and `npm test` (129 tests), `npm run build`, and `npm run lint` pass with zero `any`.
+
+---
+
+## Upgrade 2 — Fast catalog, clean albums, tournament, Playlist Builder, live stage
+
+- [x] **Goal:** Ten targeted improvements from hands-on browser testing: speed, data quality, deeper flagship bands, playback everywhere, and two bigger game/discovery features.
+- **Files:** `src/utils/{trackUtils,catalogCache,artistMetadata,arenaUtils,setlistUtils,audioUtils,builderUtils,streamingLinks}.ts`, `src/api/itunes.ts`, `src/types/track.ts`, `src/hooks/usePlayer.ts`, `src/components/{TrackCard,CardPlayButton,MiniPlayer,StreamingLinks,LineupPlayback,FestivalPoster,BlindTestGame,Navbar,StageBackdrop}.tsx` (removed `AppleMusicLink.tsx`), `src/pages/{CatalogPage,TrackDetailPage,SetlistPage,PlaylistBuilderPage}.tsx`, `src/App.tsx`, `src/index.css`, `src/App.css` (+ tests)
+- **Steps:**
+  1. **Catalog lag:** render 48 cards, then 48 more per `IntersectionObserver` sentinel or **Show More Tracks**; `React.memo` cards with stable callbacks; reuse the last sorted result and one shared `Intl.Collator`.
+  2. **Compilations & artwork:** drop compilation albums (`isCompilationAlbum`); keep the original release of each song (`dedupeSongs`, the Nirvana "Lithium" fix); one canonical cover per studio album (`canonicalizeAlbumArtwork`).
+  3. **Deeper flagships:** a deep tier for 21 bands (top 50 songs → 20–25 studio songs, capped at 25 per band); cache key `rmv:catalog:v5`.
+  4. **Card play button:** ▶/❚❚ on every card queues the filtered list from that card (`usePlayerSelector`).
+  5. **Mini-player EQ:** a preset `<select>` (Flat, Metalcore Scoop, Classic Tube Amp, Bass Drop); a compact pill on phones.
+  6. **Streaming links:** Apple Music, Spotify and YouTube on the detail page, the running order and the Playlist Builder.
+  7. **World tour poster:** acts show style only; a World Tour Dates & Venues section with 7 stops.
+  8. **Tournament:** 4 stages × 5 rounds (Easy ×1 → Medium ×1.5 → Hard ×2 → Elite ×2.5), with stage pools, heavier blur, closer decoys, a "Stage X Cleared!" transition that restores a life (max 3), and Conquered / Game Over endings.
+  9. **Playlist Builder:** `/builder` with a 5-question Sonic Diagnostic, a Metal Persona, a 10-track playlist (max 2 per band), preview / Play All / Swap / Add All 10 / Re-run, and a navbar link (2×2 on phones).
+  10. **Bolder stage:** diamond plate, crimson and amber light beams, a stage truss, lightning, embers, and translucent surfaces.
+- **Done when:** in headless Chrome the first render shows 48 cards and returning to `/` commits in under 16 ms (production build); no compilation albums and one cover per album appear; every deep-tier band has 20–25 tracks; the card play, mini EQ, streaming links, world tour, tournament progression (Stage 1 Cleared → Stage 2 at 22px/×1.5 → Game Over) and builder flow all work; every route has no overflow at 375px and a clean console; and `npm test` (171 tests), `npm run build` and `npm run lint` pass with zero `any`.

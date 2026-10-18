@@ -1,31 +1,38 @@
 import { describe, expect, it } from 'vitest'
 import mockData from '../data/mockTracks.json'
 import {
-  LIVES_PER_SET,
-  MAX_SET_SCORE,
-  ROUNDS_PER_SET,
+  FINAL_STAGE,
+  LIVES_PER_RUN,
+  MAX_TOURNAMENT_SCORE,
+  ROUNDS_PER_STAGE,
+  TOURNAMENT_STAGES,
   buildBlindTestRound,
   compareTracks,
   getArtworkBlur,
   getGuessPoints,
   getRankTitle,
-  getSetStatus,
+  getStagePoints,
+  getTournamentStage,
+  isStageCandidate,
   loadArenaRecords,
   mergeArenaRecords,
   parseStoredCount,
   pickRandomTrack,
   saveArenaRecords,
   shuffle,
-  summarizeSet,
+  summarizeTournament,
 } from './arenaUtils'
 import type { ITunesTrackRaw, RoundOutcome, RoundResult, Subgenre, Track, TrackFilters } from '../types/track'
 import {
   ARTIST_ENTRIES,
   COUNTRY_FLAGS,
+  DEEP_CATALOG_ARTISTS,
+  DEEP_CATALOG_ARTIST_IDS,
   HEADLINER_ARTISTS,
   HEADLINER_ARTIST_IDS,
   SPOTLIGHT_ARTIST_IDS,
   findArtistMetadata,
+  getCatalogTier,
   getArtistMetadata,
   normalizeArtistKey,
 } from './artistMetadata'
@@ -51,6 +58,7 @@ import {
   getUniqueCountries,
   getUniqueSubgenres,
   hasActiveFilters,
+  isCompilationAlbum,
   isStudioRecording,
   isVaultTrack,
   matchesMood,
@@ -293,13 +301,73 @@ describe('isStudioRecording (no live tracks)', () => {
   })
 })
 
-describe('headliner tier', () => {
-  it('fetches every flagship band in depth by Apple artist id', () => {
-    expect(HEADLINER_ARTISTS.length).toBe(37)
-    expect(HEADLINER_ARTIST_IDS).toHaveLength(HEADLINER_ARTISTS.length)
-    for (const name of HEADLINER_ARTISTS) expect(findArtistMetadata(name)).not.toBeNull()
-    expect(HEADLINER_ARTIST_IDS).toContain(3996865) // Metallica
-    expect(HEADLINER_ARTIST_IDS).toContain(112018) // Nirvana (Seattle, not a namesake)
+// ---------- No compilations ----------
+
+describe('isCompilationAlbum (studio albums only)', () => {
+  it('flags hits collections, anthologies and soundtracks', () => {
+    const compilations = [
+      'Greatest Hits',
+      "Guns N' Roses: Greatest Hits",
+      'The Best of Iron Maiden',
+      'Best Of - Black Sabbath',
+      'Anthology',
+      'The Essential Judas Priest',
+      'Icon',
+      'Icon 2',
+      '20th Century Masters - The Millennium Collection: The Best of Megadeth',
+      'Retrospective',
+      'The Singles 1992-2003',
+      'B-Sides & Rarities',
+      'Transformers: The Movie (Original Motion Picture Soundtrack)',
+    ]
+    for (const album of compilations) expect(isCompilationAlbum(album)).toBe(true)
+  })
+
+  it('keeps studio albums, including ones that merely contain similar words', () => {
+    const studio = [
+      'Nevermind',
+      'Master of Puppets',
+      'Iconoclast', // not "Icon"
+      'Elements of Destruction',
+      'Bestial Devastation', // not "best of"
+      'The Number of the Beast',
+      'Night Club Anthem',
+      '',
+    ]
+    for (const album of studio) expect(isCompilationAlbum(album)).toBe(false)
+    expect(isCompilationAlbum()).toBe(false)
+  })
+
+  it('drops compilation tracks during normalization', () => {
+    const raw = rawByName('Paranoid')
+    expect(normalizeTrack({ ...raw, collectionName: 'Greatest Hits 1970–1978' })).toBeNull()
+    expect(normalizeTrack({ ...raw, collectionName: 'The Best of Black Sabbath' })).toBeNull()
+    expect(normalizeTrack(raw)?.album).toBe(raw.collectionName)
+    expect(tracks.every((track) => !isCompilationAlbum(track.album))).toBe(true)
+  })
+})
+
+describe('catalog tiers', () => {
+  it('fetches the 21 flagship bands deepest, by Apple artist id', () => {
+    expect(DEEP_CATALOG_ARTISTS).toHaveLength(21)
+    expect(DEEP_CATALOG_ARTIST_IDS).toHaveLength(DEEP_CATALOG_ARTISTS.length)
+    for (const name of DEEP_CATALOG_ARTISTS) {
+      expect(findArtistMetadata(name)).not.toBeNull()
+      expect(getCatalogTier(name)).toBe('deep')
+    }
+    expect(DEEP_CATALOG_ARTIST_IDS).toContain(3996865) // Metallica
+    expect(DEEP_CATALOG_ARTIST_IDS).toContain(112018) // Nirvana (Seattle, not a namesake)
+    expect(DEEP_CATALOG_ARTIST_IDS).toContain(17304969) // Meshuggah
+  })
+
+  it('keeps the other headliners in the 10-song tier and everyone else in the spotlight', () => {
+    const deep = new Set(DEEP_CATALOG_ARTISTS.map(normalizeArtistKey))
+    const headlinersOnly = HEADLINER_ARTISTS.filter((name) => !deep.has(normalizeArtistKey(name)))
+    expect(HEADLINER_ARTIST_IDS).toHaveLength(headlinersOnly.length)
+    for (const name of headlinersOnly) expect(getCatalogTier(name)).toBe('headliner')
+    expect(getCatalogTier('GOJIRA')).toBe('deep') // case-insensitive
+    expect(getCatalogTier('Orphaned Land')).toBe('spotlight')
+    expect(getCatalogTier('Unknown Garage Band')).toBe('spotlight')
   })
 })
 
@@ -443,8 +511,8 @@ describe('international band enrichment', () => {
     const keys = ARTIST_ENTRIES.map(([name]) => normalizeArtistKey(name))
     expect(new Set(keys).size).toBe(keys.length)
     for (const [, country] of ARTIST_ENTRIES) expect(COUNTRY_FLAGS[country]).toBeTruthy()
-    const allIds = [...HEADLINER_ARTIST_IDS, ...SPOTLIGHT_ARTIST_IDS]
-    expect(new Set(allIds).size).toBe(allIds.length) // unique, and no band in both tiers
+    const allIds = [...DEEP_CATALOG_ARTIST_IDS, ...HEADLINER_ARTIST_IDS, ...SPOTLIGHT_ARTIST_IDS]
+    expect(new Set(allIds).size).toBe(allIds.length) // unique, and no band in two tiers
     expect(allIds.length).toBeGreaterThanOrEqual(90)
     const countries = new Set(ARTIST_ENTRIES.map(([, country]) => country))
     expect(countries.size).toBeGreaterThanOrEqual(19)
@@ -872,83 +940,200 @@ describe('getGuessPoints (speed scoring)', () => {
     expect(getGuessPoints(true, 5)).toBeGreaterThan(getGuessPoints(true, 6))
   })
 
-  it('caps a perfect 5-round set at 5,000 points', () => {
-    expect(MAX_SET_SCORE).toBe(5000)
-    expect(ROUNDS_PER_SET * getGuessPoints(true, 0)).toBe(MAX_SET_SCORE)
+  it('scales by the stage multiplier: ×1, ×1.5, ×2, ×2.5', () => {
+    expect(getStagePoints(true, 0, 1)).toBe(1000)
+    expect(getStagePoints(true, 0, 2)).toBe(1500)
+    expect(getStagePoints(true, 15, 3)).toBe(1100)
+    expect(getStagePoints(true, 0, 4)).toBe(2500)
+    expect(getStagePoints(false, 0, 4)).toBe(0)
+    expect(getStagePoints(true, 0, 99)).toBe(2500) // clamped to the final stage
   })
 })
 
+// ---------- Tournament ----------
+
 /** Round results from outcomes; correct rounds score `points` each. */
-const roundResults = (outcomes: RoundOutcome[], points = 800): RoundResult[] =>
+const roundResults = (outcomes: RoundOutcome[], points = 800, stage = 1): RoundResult[] =>
   outcomes.map((outcome, index) => ({
     track: tracks[index % tracks.length] ?? makeTrack(),
     outcome,
     points: outcome === 'correct' ? points : 0,
+    stage,
   }))
 
-describe('getSetStatus (game-over evaluation)', () => {
-  it('keeps playing until 5 rounds or the 3rd lost life', () => {
-    expect(LIVES_PER_SET).toBe(3)
-    expect(getSetStatus(0, 3)).toBe('playing')
-    expect(getSetStatus(4, 1)).toBe('playing')
-    expect(getSetStatus(5, 1)).toBe('victory')
-    expect(getSetStatus(5, 3)).toBe('victory')
-    expect(getSetStatus(3, 0)).toBe('game-over')
+const FIVE_CORRECT: RoundOutcome[] = ['correct', 'correct', 'correct', 'correct', 'correct']
+
+describe('tournament stages', () => {
+  it('climbs from Easy to Elite with bigger multipliers, heavier blur and closer decoys', () => {
+    expect(TOURNAMENT_STAGES.map((stage) => stage.difficulty)).toEqual(['Easy', 'Medium', 'Hard', 'Elite'])
+    expect(TOURNAMENT_STAGES.map((stage) => stage.multiplier)).toEqual([1, 1.5, 2, 2.5])
+    expect(TOURNAMENT_STAGES.map((stage) => stage.decoyMode)).toEqual([
+      'random',
+      'similar',
+      'same-style',
+      'same-style',
+    ])
+    const blurs = TOURNAMENT_STAGES.map((stage) => stage.startBlurPx)
+    expect([...blurs].sort((a, b) => a - b)).toEqual(blurs)
+    expect(new Set(blurs).size).toBe(blurs.length)
+    expect(FINAL_STAGE).toBe(4)
+    expect(ROUNDS_PER_STAGE).toBe(5)
+    expect(LIVES_PER_RUN).toBe(3)
   })
 
-  it('treats losing the last life on round 5 as game over, not victory', () => {
-    expect(getSetStatus(5, 0)).toBe('game-over')
+  it('clamps stage numbers to the tournament', () => {
+    expect(getTournamentStage(0).number).toBe(1)
+    expect(getTournamentStage(2).name).toBe('Modern Heavyweights & Pit Icons')
+    expect(getTournamentStage(42).number).toBe(FINAL_STAGE)
+  })
+
+  it('caps a perfect run at 5 rounds × 1,000 × every multiplier (35,000)', () => {
+    expect(MAX_TOURNAMENT_SCORE).toBe(35_000)
+  })
+
+  it('fills each stage with its own pool of bands', () => {
+    const metallica = makeTrack({ artist: 'Metallica', originCountry: 'United States', subgenre: 'Thrash Metal' })
+    const bmth = makeTrack({ artist: 'Bring Me The Horizon', originCountry: 'United Kingdom', subgenre: 'Metalcore' })
+    const meshuggah = makeTrack({ artist: 'Meshuggah', originCountry: 'Sweden', subgenre: 'Djent / Extreme Metal' })
+    const israeli = makeTrack({ artist: 'Orphaned Land', originCountry: 'Israel', subgenre: 'Oriental / Folk Metal' })
+    const nordicBlack = makeTrack({ artist: 'Dimmu Borgir', originCountry: 'Norway', subgenre: 'Symphonic Black Metal' })
+    const nordicRock = makeTrack({ artist: 'Europe', originCountry: 'Sweden', subgenre: 'Hard Rock' })
+    const uncurated = makeTrack({ artist: 'Unknown Garage Band', originCountry: 'Unknown' })
+
+    expect(isStageCandidate(1, metallica)).toBe(true)
+    expect(isStageCandidate(1, bmth)).toBe(false)
+    expect(isStageCandidate(2, bmth)).toBe(true)
+    expect(isStageCandidate(2, metallica)).toBe(false)
+    expect(isStageCandidate(3, meshuggah)).toBe(true)
+    expect(isStageCandidate(3, israeli)).toBe(true)
+    expect(isStageCandidate(3, nordicBlack)).toBe(true)
+    expect(isStageCandidate(3, nordicRock)).toBe(false) // Nordic, but not extreme
+    expect(isStageCandidate(4, israeli)).toBe(true) // curated deep cut
+    expect(isStageCandidate(4, metallica)).toBe(false) // flagship band, not a deep cut
+    expect(isStageCandidate(4, uncurated)).toBe(false)
+  })
+
+  it('draws stage answers from the stage pool when one is given', () => {
+    const pool = [
+      makeTrack({ id: 1, artist: 'Metallica', title: 'One' }),
+      makeTrack({ id: 2, artist: 'Band B', title: 'B' }),
+      makeTrack({ id: 3, artist: 'Band C', title: 'C' }),
+      makeTrack({ id: 4, artist: 'Band D', title: 'D' }),
+      makeTrack({ id: 5, artist: 'Band E', title: 'E' }),
+    ]
+    for (let seed = 1; seed <= 15; seed += 1) {
+      const round = buildBlindTestRound(pool, {
+        random: seeded(seed),
+        isAnswerCandidate: (track) => isStageCandidate(1, track),
+      })
+      expect(round?.answer.artist).toBe('Metallica')
+    }
+  })
+
+  it('uses same-style decoys on the hard stages', () => {
+    const target = makeTrack({ id: 100, artist: 'Meshuggah', title: 'Bleed', subgenre: 'Djent / Extreme Metal', originCountry: 'Sweden' })
+    const sameStyle = [1, 2, 3].map((n) =>
+      makeTrack({ id: 200 + n, artist: `Djent Band ${n}`, title: `Djent ${n}`, subgenre: 'Djent / Extreme Metal' }),
+    )
+    const otherStyle = [1, 2, 3, 4, 5].map((n) =>
+      makeTrack({ id: 300 + n, artist: `Rock Band ${n}`, title: `Rock ${n}`, subgenre: 'Classic Rock' }),
+    )
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const round = buildBlindTestRound([...otherStyle, target, ...sameStyle], {
+        random: seeded(seed),
+        isAnswerCandidate: (track) => isStageCandidate(3, track),
+        decoyMode: getTournamentStage(3).decoyMode,
+      })
+      expect(round?.answer.id).toBe(target.id)
+      const decoys = round?.options.filter((option) => option.id !== target.id) ?? []
+      expect(decoys.every((decoy) => decoy.subgenre === 'Djent / Extreme Metal')).toBe(true)
+    }
   })
 })
 
-describe('summarizeSet', () => {
-  it('starts a fresh set with 3 lives and nothing scored', () => {
-    expect(summarizeSet([])).toEqual({
+describe('summarizeTournament', () => {
+  it('starts a fresh run on stage 1 with 3 lives and nothing scored', () => {
+    expect(summarizeTournament([])).toEqual({
       score: 0,
       played: 0,
       correct: 0,
       livesLeft: 3,
       currentStreak: 0,
       bestStreak: 0,
+      stage: 1,
+      roundInStage: 0,
+      stagesCleared: 0,
+      justClearedStage: null,
+      restoredLife: false,
       status: 'playing',
     })
   })
 
-  it('ends in victory after 5 rounds with a life left, tracking accuracy and streaks', () => {
-    const set = summarizeSet(roundResults(['correct', 'correct', 'wrong', 'correct', 'correct']))
-    expect(set).toEqual({
-      score: 3200,
+  it('clears a stage after 5 rounds, restores one life and moves to the next stage', () => {
+    const run = summarizeTournament(roundResults(['correct', 'wrong', 'correct', 'wrong', 'correct']))
+    expect(run).toMatchObject({
+      score: 2400,
       played: 5,
-      correct: 4,
-      livesLeft: 2,
-      currentStreak: 2,
-      bestStreak: 2,
-      status: 'victory',
+      correct: 3,
+      livesLeft: 2, // 3 − 2 misses + 1 restored
+      stage: 2,
+      roundInStage: 0,
+      stagesCleared: 1,
+      justClearedStage: 1,
+      restoredLife: true,
+      status: 'playing',
     })
   })
 
-  it('counts wrong guesses and timeouts as lost lives, ending early on the 3rd', () => {
-    const set = summarizeSet(roundResults(['wrong', 'correct', 'timeout', 'wrong']))
-    expect(set).toMatchObject({ played: 4, correct: 1, livesLeft: 0, currentStreak: 0, status: 'game-over' })
+  it('never restores past 3 lives, and the transition flag clears on the next round', () => {
+    const cleared = summarizeTournament(roundResults(FIVE_CORRECT))
+    expect(cleared).toMatchObject({ livesLeft: 3, restoredLife: false, justClearedStage: 1 })
+    const next = summarizeTournament([...roundResults(FIVE_CORRECT), ...roundResults(['wrong'], 0, 2)])
+    expect(next).toMatchObject({ livesLeft: 2, stage: 2, roundInStage: 1, justClearedStage: null, restoredLife: false })
   })
 
-  it('finds the longest streak inside the set', () => {
-    const set = summarizeSet(roundResults(['correct', 'correct', 'correct', 'wrong', 'correct']))
-    expect(set.bestStreak).toBe(3)
-    expect(set.currentStreak).toBe(1)
+  it('ends in game over when the last life is lost — even on a stage\'s 5th round', () => {
+    const early = summarizeTournament(roundResults(['wrong', 'timeout', 'wrong']))
+    expect(early).toMatchObject({ played: 3, livesLeft: 0, stage: 1, status: 'game-over', stagesCleared: 0 })
+    const onFifth = summarizeTournament(roundResults(['correct', 'correct', 'wrong', 'wrong', 'wrong']))
+    expect(onFifth).toMatchObject({ status: 'game-over', stagesCleared: 0, justClearedStage: null })
+  })
+
+  it('carries lives across stages', () => {
+    const results = [
+      ...roundResults(['wrong', 'wrong', 'correct', 'correct', 'correct'], 800, 1), // 1 life + 1 → 2
+      ...roundResults(['wrong', 'correct', 'correct', 'wrong'], 800, 2), // 2 − 2 → 0
+    ]
+    expect(summarizeTournament(results)).toMatchObject({ stage: 2, livesLeft: 0, status: 'game-over' })
+  })
+
+  it('conquers the tournament after the final stage, with streaks across the whole run', () => {
+    const results = TOURNAMENT_STAGES.flatMap((stage) => roundResults(FIVE_CORRECT, 1000, stage.number))
+    const run = summarizeTournament(results)
+    expect(run).toMatchObject({
+      played: 20,
+      correct: 20,
+      stagesCleared: 4,
+      stage: 4,
+      status: 'conquered',
+      bestStreak: 20,
+      justClearedStage: null,
+    })
+    // Results after the end can't undo it.
+    expect(summarizeTournament([...results, ...roundResults(['wrong'])]).status).toBe('conquered')
   })
 })
 
 describe('getRankTitle', () => {
-  it('maps the final set score to a rank at the documented thresholds', () => {
+  it('maps the tournament score to a rank at the documented thresholds', () => {
     expect(getRankTitle(0)).toBe('Garage Roadie')
-    expect(getRankTitle(999)).toBe('Garage Roadie')
-    expect(getRankTitle(1000)).toBe('Mosh Pit Regular')
-    expect(getRankTitle(2499)).toBe('Mosh Pit Regular')
-    expect(getRankTitle(2500)).toBe('Main Stage Shredder')
-    expect(getRankTitle(3999)).toBe('Main Stage Shredder')
-    expect(getRankTitle(4000)).toBe('Immortal Riff God')
-    expect(getRankTitle(5000)).toBe('Immortal Riff God')
+    expect(getRankTitle(4999)).toBe('Garage Roadie')
+    expect(getRankTitle(5000)).toBe('Mosh Pit Regular')
+    expect(getRankTitle(11_999)).toBe('Mosh Pit Regular')
+    expect(getRankTitle(12_000)).toBe('Main Stage Shredder')
+    expect(getRankTitle(21_999)).toBe('Main Stage Shredder')
+    expect(getRankTitle(22_000)).toBe('Immortal Riff God')
+    expect(getRankTitle(MAX_TOURNAMENT_SCORE)).toBe('Immortal Riff God')
   })
 })
 
@@ -961,10 +1146,10 @@ describe('all-time arena records', () => {
 
   it('only ever raises the high score and best streak', () => {
     const records = { highScore: 3000, bestStreak: 4 }
-    const set = summarizeSet(roundResults(['correct', 'correct', 'correct', 'correct', 'correct'], 900))
-    expect(mergeArenaRecords(records, set)).toEqual({ highScore: 4500, bestStreak: 5 })
-    const weakSet = summarizeSet(roundResults(['wrong', 'wrong', 'wrong']))
-    expect(mergeArenaRecords(records, weakSet)).toEqual(records)
+    const run = summarizeTournament(roundResults(FIVE_CORRECT, 900))
+    expect(mergeArenaRecords(records, run)).toEqual({ highScore: 4500, bestStreak: 5 })
+    const weakRun = summarizeTournament(roundResults(['wrong', 'wrong', 'wrong']))
+    expect(mergeArenaRecords(records, weakRun)).toEqual(records)
   })
 
   it('round-trips through storage and survives blocked storage', () => {

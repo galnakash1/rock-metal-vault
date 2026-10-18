@@ -3,26 +3,37 @@ import { usePlayer } from '../hooks/usePlayer'
 import type { Track } from '../types/track'
 import { SETLIST_QUEUE_LABEL } from '../utils/setlistUtils'
 
-/** True while the active queue is this festival lineup (not a single track or another queue). */
-function useIsLineupQueue(): boolean {
+/** True while the active queue is this list (not a single track or another queue). */
+function useIsListQueue(queueLabel: string): boolean {
   const player = usePlayer()
-  return player.queueLabel === SETLIST_QUEUE_LABEL && player.queue.length > 0 && !player.concealed
+  return player.queueLabel === queueLabel && player.queue.length > 0 && !player.concealed
 }
 
 export interface LineupPlayButtonProps {
   setlist: Track[]
+  /** Queue name shown in the players ("Setlist", "Playlist"). */
+  queueLabel?: string
+  /** What the button plays, e.g. "Festival Lineup" → "Pause Festival Lineup". */
+  noun?: string
+  /** Label before anything plays. */
+  playLabel?: string
 }
 
-/** "▶ Play Full Festival Lineup": queues the whole running order, or pauses/resumes it. */
-export function LineupPlayButton({ setlist }: LineupPlayButtonProps) {
+/** "▶ Play Full Festival Lineup": queues the whole list, or pauses/resumes it. */
+export function LineupPlayButton({
+  setlist,
+  queueLabel = SETLIST_QUEUE_LABEL,
+  noun = 'Festival Lineup',
+  playLabel = `Play Full ${noun}`,
+}: LineupPlayButtonProps) {
   const player = usePlayer()
-  const isLineup = useIsLineupQueue()
+  const isLineup = useIsListQueue(queueLabel)
   const isPlaying = isLineup && player.isPlaying
 
   const handleClick = () => {
     if (isPlaying) pause()
     else if (isLineup && player.track) void togglePlay(player.track)
-    else void playQueue(setlist, 0, SETLIST_QUEUE_LABEL)
+    else void playQueue(setlist, 0, queueLabel)
   }
 
   return (
@@ -32,7 +43,7 @@ export function LineupPlayButton({ setlist }: LineupPlayButtonProps) {
       onClick={handleClick}
     >
       <span aria-hidden="true">{isPlaying ? '❚❚' : '▶'}</span>{' '}
-      {isPlaying ? 'Pause Festival Lineup' : isLineup ? 'Resume Festival Lineup' : 'Play Full Festival Lineup'}
+      {isPlaying ? `Pause ${noun}` : isLineup ? `Resume ${noun}` : playLabel}
     </button>
   )
 }
@@ -40,10 +51,11 @@ export function LineupPlayButton({ setlist }: LineupPlayButtonProps) {
 export interface RowPlayButtonProps {
   setlist: Track[]
   index: number
+  queueLabel?: string
 }
 
-/** Play/pause for one running-order row; starts the lineup queue from this track. */
-export function RowPlayButton({ setlist, index }: RowPlayButtonProps) {
+/** Play/pause for one running-order row; starts the list's queue from this track. */
+export function RowPlayButton({ setlist, index, queueLabel = SETLIST_QUEUE_LABEL }: RowPlayButtonProps) {
   const player = usePlayer()
   const track = setlist[index]
   if (!track) return null
@@ -54,7 +66,7 @@ export function RowPlayButton({ setlist, index }: RowPlayButtonProps) {
   const handleClick = () => {
     if (isPlaying) pause()
     else if (isCurrent) void togglePlay(track)
-    else void playQueue(setlist, index, SETLIST_QUEUE_LABEL)
+    else void playQueue(setlist, index, queueLabel)
   }
 
   return (

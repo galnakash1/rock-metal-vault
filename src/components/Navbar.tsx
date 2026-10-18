@@ -30,6 +30,11 @@ function Navbar({ setlistCount }: NavbarProps) {
               Riff Arena
             </NavLink>
           </li>
+          <li>
+            <NavLink to="/builder" className="nav-link">
+              Playlist Builder
+            </NavLink>
+          </li>
         </ul>
       </nav>
     </header>

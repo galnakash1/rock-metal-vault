@@ -4,18 +4,23 @@ import { getSnapshot, onTrackEnded, pause, playTrack, stop } from '../audio/play
 import { usePlayer } from '../hooks/usePlayer'
 import type { ArenaRecords, BlindTestRound, RoundResult, Track } from '../types/track'
 import {
-  LIVES_PER_SET,
-  MAX_SET_SCORE,
+  FINAL_STAGE,
+  LIVES_PER_RUN,
+  MAX_TOURNAMENT_SCORE,
   PREVIEW_SECONDS,
-  ROUNDS_PER_SET,
+  ROUNDS_PER_STAGE,
+  TOURNAMENT_STAGES,
   buildBlindTestRound,
   getArtworkBlur,
-  getGuessPoints,
   getRankTitle,
+  getStagePoints,
+  getTournamentStage,
+  isStageCandidate,
   loadArenaRecords,
   mergeArenaRecords,
   saveArenaRecords,
-  summarizeSet,
+  summarizeTournament,
+  type TournamentStage,
 } from '../utils/arenaUtils'
 import { getBrowserStorage } from '../utils/setlistUtils'
 import { formatDuration } from '../utils/trackUtils'
@@ -28,32 +33,52 @@ export interface BlindTestGameProps {
   onToggleSetlist: (track: Track) => void
 }
 
-type Phase = 'intro' | 'round' | 'summary'
+type Phase = 'intro' | 'round' | 'stage-cleared' | 'summary'
+
+/** Which stage and round-in-stage the current round belongs to (fixed when the round is built). */
+interface RoundMeta {
+  stage: number
+  number: number
+}
 
 const RECENT_ANSWERS_TO_AVOID = 15
 const formatPoints = (points: number): string => points.toLocaleString('en-US')
+const formatMultiplier = (stage: TournamentStage): string => `×${stage.multiplier.toFixed(1)}`
 
 /** Amp-tube lives indicator: lit tubes are lives left, dark ones are blown. */
 function AmpTubes({ livesLeft }: { livesLeft: number }) {
   return (
-    <span className="amp-tubes" role="img" aria-label={`${livesLeft} of ${LIVES_PER_SET} lives left`}>
-      {Array.from({ length: LIVES_PER_SET }, (_, index) => (
+    <span className="amp-tubes" role="img" aria-label={`${livesLeft} of ${LIVES_PER_RUN} lives left`}>
+      {Array.from({ length: LIVES_PER_RUN }, (_, index) => (
         <span key={index} className={`amp-tube${index < livesLeft ? ' amp-tube--lit' : ''}`} />
       ))}
     </span>
   )
 }
 
+/** "Stage 2 · Medium · ×1.5" chip row for a stage. */
+function StageBadges({ stage }: { stage: TournamentStage }) {
+  return (
+    <span className="stage-badges">
+      <span className="stage-badge">Stage {stage.number}</span>
+      <span className={`stage-badge stage-badge--${stage.difficulty.toLowerCase()}`}>{stage.difficulty}</span>
+      <span className="stage-badge stage-badge--multiplier">{formatMultiplier(stage)} points</span>
+    </span>
+  )
+}
+
 /**
- * Riff Blind-Test: sets of 5 rounds with 3 lives (amp tubes). A hidden preview plays (concealed,
- * so the mini-player can't spoil it) while the blurred artwork sharpens; guess among 4 options —
- * faster correct guesses score more. Wrong guesses and timeouts blow a tube. The set ends in
- * victory after 5 rounds, or game over when the last tube blows, with a final scoreboard.
+ * Riff Blind-Test Tournament: stages of 5 rounds that get harder (rarer bands, heavier blur,
+ * closer decoys, bigger multipliers), with 3 lives (amp tubes) for the whole run. A hidden preview
+ * plays (concealed, so the mini-player can't spoil it) while the blurred artwork sharpens; guess
+ * among 4 options — faster correct guesses score more. Wrong guesses and timeouts blow a tube;
+ * clearing a stage restores one. The run ends when the final stage is conquered or the last tube blows.
  */
 function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGameProps) {
   const player = usePlayer()
   const [phase, setPhase] = useState<Phase>('intro')
   const [round, setRound] = useState<BlindTestRound | null>(null)
+  const [roundMeta, setRoundMeta] = useState<RoundMeta>({ stage: 1, number: 1 })
   const [guessId, setGuessId] = useState<number | null>(null)
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null)
   const [results, setResults] = useState<RoundResult[]>([])
@@ -63,7 +88,8 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
   const [newRecords, setNewRecords] = useState({ highScore: false, bestStreak: false })
   const summaryHeadingRef = useRef<HTMLHeadingElement>(null)
 
-  const summary = useMemo(() => summarizeSet(results), [results])
+  const summary = useMemo(() => summarizeTournament(results), [results])
+  const roundStage = getTournamentStage(roundMeta.stage)
 
   useEffect(() => {
     saveArenaRecords(getBrowserStorage(), records)
@@ -77,18 +103,18 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
     [],
   )
 
-  // Announce the final scoreboard: move focus to its heading when it appears.
+  // Announce the stage transition and the final scoreboard: move focus to their heading.
   useEffect(() => {
-    if (phase === 'summary') summaryHeadingRef.current?.focus()
+    if (phase === 'summary' || phase === 'stage-cleared') summaryHeadingRef.current?.focus()
   }, [phase])
 
-  /** Records the current round's result; on the set's final result, updates the all-time records. */
+  /** Records the current round's result; when the run ends, updates the all-time records. */
   const recordResult = useCallback(
     (result: RoundResult) => {
       const nextResults = [...results, result]
       setResults(nextResults)
       setRoundResult(result)
-      const nextSummary = summarizeSet(nextResults)
+      const nextSummary = summarizeTournament(nextResults)
       if (nextSummary.status !== 'playing') {
         setNewRecords({
           highScore: nextSummary.score > records.highScore,
@@ -105,27 +131,33 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
     if (phase !== 'round' || !round || roundResult) return
     return onTrackEnded((track) => {
       if (track.id === round.answer.id && getSnapshot().concealed) {
-        recordResult({ track: round.answer, outcome: 'timeout', points: 0 })
+        recordResult({ track: round.answer, outcome: 'timeout', points: 0, stage: roundMeta.stage })
       }
     })
-  }, [phase, round, roundResult, recordResult])
+  }, [phase, round, roundMeta.stage, roundResult, recordResult])
 
   const isRoundAudio = round !== null && player.track?.id === round.answer.id && player.concealed
   const isRoundPlaying = isRoundAudio && player.isPlaying
   const elapsed = isRoundAudio ? player.currentTime : 0
   const duration = isRoundAudio ? player.duration : PREVIEW_SECONDS
   const revealed = roundResult !== null
-  const blurPx = revealed ? 0 : getArtworkBlur(elapsed, duration)
-  const roundNumber = Math.min(revealed ? results.length : results.length + 1, ROUNDS_PER_SET)
-  const isSetOver = summary.status !== 'playing'
+  const blurPx = revealed ? 0 : getArtworkBlur(elapsed, duration, roundStage.startBlurPx)
+  const isRunOver = summary.status !== 'playing'
 
-  const playNextRound = () => {
-    const next = buildBlindTestRound(tracks, { excludeIds: new Set(recentIds) })
+  /** Builds the next round from the stage the run is now on (the summary has moved on after a clear). */
+  const playNextRound = (from = summary) => {
+    const stage = getTournamentStage(from.stage)
+    const next = buildBlindTestRound(tracks, {
+      excludeIds: new Set(recentIds),
+      isAnswerCandidate: (track) => isStageCandidate(stage.number, track),
+      decoyMode: stage.decoyMode,
+    })
     if (!next) {
       setNotEnoughTracks(true)
       return
     }
     setRound(next)
+    setRoundMeta({ stage: stage.number, number: from.roundInStage + 1 })
     setGuessId(null)
     setRoundResult(null)
     setPhase('round')
@@ -133,10 +165,15 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
     void playTrack(next.answer, { concealed: true })
   }
 
-  const startNewSet = () => {
+  const startNewRun = () => {
     setResults([])
     setNewRecords({ highScore: false, bestStreak: false })
-    playNextRound()
+    playNextRound(summarizeTournament([]))
+  }
+
+  const showStageCleared = () => {
+    if (getSnapshot().concealed) stop()
+    setPhase('stage-cleared')
   }
 
   const showFinalResults = () => {
@@ -148,9 +185,9 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
     if (!round || revealed) return
     const isCorrect = option.id === round.answer.id
     // If the riff isn't playing (replaced or never started), score as if time ran out.
-    const points = getGuessPoints(isCorrect, isRoundAudio ? player.currentTime : PREVIEW_SECONDS)
+    const points = getStagePoints(isCorrect, isRoundAudio ? player.currentTime : PREVIEW_SECONDS, roundMeta.stage)
     setGuessId(option.id)
-    recordResult({ track: round.answer, outcome: isCorrect ? 'correct' : 'wrong', points })
+    recordResult({ track: round.answer, outcome: isCorrect ? 'correct' : 'wrong', points, stage: roundMeta.stage })
   }
 
   const handleTogglePlayback = () => {
@@ -172,18 +209,24 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
   const header = (
     <header className="arena-section-header">
       <div>
-        <h2 id="blind-test-title">Riff Blind-Test Challenge</h2>
-        <p className="page-summary">
-          5 rounds, 3 amp tubes. Name each track from its riff — the artwork sharpens as the preview
-          plays, and faster guesses score more.
-        </p>
+        <h2 id="blind-test-title">Riff Blind-Test Tournament</h2>
+        {phase === 'round' ? (
+          <p className="stage-heading">
+            <StageBadges stage={roundStage} /> <span className="stage-name">{roundStage.name}</span>
+          </p>
+        ) : (
+          <p className="page-summary">
+            {FINAL_STAGE} stages of {ROUNDS_PER_STAGE} rounds, 3 amp tubes for the whole run. Name
+            each track from its riff — every stage gets rarer, blurrier and worth more.
+          </p>
+        )}
       </div>
       {phase === 'round' && (
-        <dl className="scoreboard" aria-label="Current set">
+        <dl className="scoreboard" aria-label="Current run">
           <div>
             <dt>Round</dt>
             <dd>
-              {roundNumber} <span className="scoreboard-sub">of {ROUNDS_PER_SET}</span>
+              {roundMeta.number} <span className="scoreboard-sub">of {ROUNDS_PER_STAGE}</span>
             </dd>
           </div>
           <div>
@@ -193,7 +236,7 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
             </dd>
           </div>
           <div>
-            <dt>Set score</dt>
+            <dt>Score</dt>
             <dd>{formatPoints(summary.score)}</dd>
           </div>
           <div>
@@ -213,16 +256,74 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
   )
 
   // ---------- Final scoreboard ----------
+  if (phase === 'stage-cleared') {
+    const cleared = getTournamentStage(summary.justClearedStage ?? summary.stage - 1)
+    const upcoming = getTournamentStage(summary.stage)
+    const stageResults = results.filter((result) => result.stage === cleared.number)
+    const stageScore = stageResults.reduce((total, result) => total + result.points, 0)
+    const stageCorrect = stageResults.filter((result) => result.outcome === 'correct').length
+    return (
+      <section className="blind-test" aria-labelledby="blind-test-title">
+        {header}
+        <div className="stage-cleared">
+          <div className="set-banner set-banner--victory">
+            <h3 className="set-banner-title" ref={summaryHeadingRef} tabIndex={-1}>
+              Stage {cleared.number} Cleared!
+            </h3>
+            <p className="set-rank">
+              {cleared.name}: {stageCorrect} / {stageResults.length} correct · +{formatPoints(stageScore)} points
+            </p>
+          </div>
+          <dl className="set-stats">
+            <div>
+              <dt>Run score</dt>
+              <dd>{formatPoints(summary.score)}</dd>
+            </div>
+            <div>
+              <dt>Lives carried over</dt>
+              <dd>
+                <AmpTubes livesLeft={summary.livesLeft} />
+                <span className="scoreboard-sub">
+                  {summary.restoredLife ? ' +1 tube restored' : ` already at full power (max ${LIVES_PER_RUN})`}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Streak</dt>
+              <dd>{summary.currentStreak}</dd>
+            </div>
+          </dl>
+          <div className="stage-next">
+            <p className="stage-next-label">Up next</p>
+            <p className="stage-heading">
+              <StageBadges stage={upcoming} /> <span className="stage-name">{upcoming.name}</span>
+            </p>
+            <p className="stage-next-description">{upcoming.description}</p>
+          </div>
+          <button type="button" className="button button--large" onClick={() => playNextRound()}>
+            Advance to Stage {upcoming.number} →
+          </button>
+        </div>
+      </section>
+    )
+  }
+
   if (phase === 'summary') {
-    const isVictory = summary.status === 'victory'
+    const isConquered = summary.status === 'conquered'
+    const reachedStage = getTournamentStage(summary.stage)
     return (
       <section className="blind-test" aria-labelledby="blind-test-title">
         {header}
         <div className="set-summary">
-          <div className={`set-banner set-banner--${isVictory ? 'victory' : 'game-over'}`}>
+          <div className={`set-banner set-banner--${isConquered ? 'victory' : 'game-over'}`}>
             <h3 className="set-banner-title" ref={summaryHeadingRef} tabIndex={-1}>
-              {isVictory ? 'Set Complete!' : 'Game Over — Amp Blown!'}
+              {isConquered ? 'Tournament Conquered!' : 'Game Over — Amp Blown!'}
             </h3>
+            <p className="set-rank">
+              {isConquered
+                ? `All ${FINAL_STAGE} stages cleared.`
+                : `Reached Stage ${reachedStage.number} of ${FINAL_STAGE}: ${reachedStage.name} · ${summary.stagesCleared} ${summary.stagesCleared === 1 ? 'stage' : 'stages'} cleared.`}
+            </p>
             <p className="set-rank">
               Rank earned: <strong>{getRankTitle(summary.score)}</strong>
             </p>
@@ -230,10 +331,10 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
 
           <dl className="set-stats">
             <div>
-              <dt>Final set score</dt>
+              <dt>Final score</dt>
               <dd>
                 {formatPoints(summary.score)}
-                <span className="scoreboard-sub"> / {formatPoints(MAX_SET_SCORE)}</span>
+                <span className="scoreboard-sub"> / {formatPoints(MAX_TOURNAMENT_SCORE)}</span>
                 {newRecords.highScore && <span className="win-badge">New high score</span>}
               </dd>
             </div>
@@ -244,7 +345,7 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
               </dd>
             </div>
             <div>
-              <dt>Best streak in set</dt>
+              <dt>Best streak in run</dt>
               <dd>
                 {summary.bestStreak}
                 {newRecords.bestStreak && <span className="win-badge">New record</span>}
@@ -262,53 +363,59 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
 
           <h3 className="recap-title">Round-by-round recap</h3>
           <ol className="recap-list">
-            {results.map((result, index) => (
-              <li key={`${result.track.id}-${index}`} className="recap-item">
-                <span
-                  className="recap-outcome"
-                  role="img"
-                  aria-label={
-                    result.outcome === 'correct'
-                      ? 'Correct'
-                      : result.outcome === 'timeout'
-                        ? "Time's up"
-                        : 'Wrong'
-                  }
-                >
-                  {result.outcome === 'correct' ? '✅' : '❌'}
-                </span>
-                <span className="recap-round">Round {index + 1}</span>
-                <img
-                  className="recap-art"
-                  src={result.track.artworkUrl}
-                  alt=""
-                  width={48}
-                  height={48}
-                  loading="lazy"
-                />
-                <span className="recap-track">
-                  <Link to={`/tracks/${result.track.id}`} className="recap-title-link">
-                    {result.track.title}
-                  </Link>
-                  <span className="recap-artist">
-                    {result.track.artist} · <span aria-hidden="true">{result.track.originFlag}</span>{' '}
-                    {result.track.subgenre}
-                    {result.outcome === 'timeout' && ' · time ran out'}
+            {results.map((result, index) => {
+              const roundInStage =
+                results.slice(0, index + 1).filter((item) => item.stage === result.stage).length
+              return (
+                <li key={`${result.track.id}-${index}`} className="recap-item">
+                  <span
+                    className="recap-outcome"
+                    role="img"
+                    aria-label={
+                      result.outcome === 'correct'
+                        ? 'Correct'
+                        : result.outcome === 'timeout'
+                          ? "Time's up"
+                          : 'Wrong'
+                    }
+                  >
+                    {result.outcome === 'correct' ? '✅' : '❌'}
                   </span>
-                </span>
-                <span className="recap-points">+{formatPoints(result.points)}</span>
-                <SetlistButton
-                  variant="compact"
-                  trackTitle={result.track.title}
-                  inSetlist={isInSetlist(result.track.id)}
-                  onToggle={() => onToggleSetlist(result.track)}
-                />
-              </li>
-            ))}
+                  <span className="recap-round">
+                    S{result.stage} · R{roundInStage}
+                  </span>
+                  <img
+                    className="recap-art"
+                    src={result.track.artworkUrl}
+                    alt=""
+                    width={48}
+                    height={48}
+                    loading="lazy"
+                  />
+                  <span className="recap-track">
+                    <Link to={`/tracks/${result.track.id}`} className="recap-title-link">
+                      {result.track.title}
+                    </Link>
+                    <span className="recap-artist">
+                      {result.track.artist} · <span aria-hidden="true">{result.track.originFlag}</span>{' '}
+                      {result.track.subgenre}
+                      {result.outcome === 'timeout' && ' · time ran out'}
+                    </span>
+                  </span>
+                  <span className="recap-points">+{formatPoints(result.points)}</span>
+                  <SetlistButton
+                    variant="compact"
+                    trackTitle={result.track.title}
+                    inSetlist={isInSetlist(result.track.id)}
+                    onToggle={() => onToggleSetlist(result.track)}
+                  />
+                </li>
+              )
+            })}
           </ol>
 
-          <button type="button" className="button button--large" onClick={startNewSet}>
-            ▶ Play New Set
+          <button type="button" className="button button--large" onClick={startNewRun}>
+            ▶ Start a New Tournament
           </button>
         </div>
       </section>
@@ -322,13 +429,22 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
         {header}
         <div className="blind-test-intro">
           <p>
-            Each set is <strong>{ROUNDS_PER_SET} rounds</strong> and you have{' '}
-            <strong>{LIVES_PER_SET} amp tubes</strong>. A wrong guess — or letting the 30-second
-            riff run out — blows a tube. Survive all {ROUNDS_PER_SET} rounds to complete the set.
+            Each stage is <strong>{ROUNDS_PER_STAGE} rounds</strong> and you have{' '}
+            <strong>{LIVES_PER_RUN} amp tubes</strong> for the whole run. A wrong guess — or letting
+            the 30-second riff run out — blows a tube; clearing a stage restores one.
           </p>
+          <ol className="stage-ladder">
+            {TOURNAMENT_STAGES.map((stage) => (
+              <li key={stage.number} className="stage-ladder-item">
+                <StageBadges stage={stage} />
+                <strong className="stage-name">{stage.name}</strong>
+                <span className="stage-ladder-description">{stage.description}</span>
+              </li>
+            ))}
+          </ol>
           {allTimeLine}
-          <button type="button" className="button button--large" onClick={startNewSet}>
-            ▶ Start the challenge
+          <button type="button" className="button button--large" onClick={startNewRun}>
+            ▶ Start the Tournament
           </button>
         </div>
       </section>
@@ -444,9 +560,19 @@ function BlindTestGame({ tracks, isInSetlist, onToggleSetlist }: BlindTestGamePr
             <button
               type="button"
               className="button button--large"
-              onClick={isSetOver ? showFinalResults : playNextRound}
+              onClick={
+                isRunOver
+                  ? showFinalResults
+                  : summary.justClearedStage !== null
+                    ? showStageCleared
+                    : () => playNextRound()
+              }
             >
-              {isSetOver ? 'See Final Results' : 'Next Riff →'}
+              {isRunOver
+                ? 'See Final Results'
+                : summary.justClearedStage !== null
+                  ? `Stage ${summary.justClearedStage} Cleared →`
+                  : 'Next Riff →'}
             </button>
           )}
           {allTimeLine}

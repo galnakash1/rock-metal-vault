@@ -90,8 +90,13 @@ export function getTrackIdFromPath(pathname: string): number | null {
 
 /**
  * The mini-player shows whenever a preview is loaded (playing or paused), except on that
- * track's own detail page, where the full Amp Console already controls it.
+ * track's own detail page (the full Amp Console already controls it) and for concealed
+ * Blind-Test playback (showing the title would give the answer away).
  */
-export function shouldShowMiniPlayer(loadedTrackId: number | null, pathname: string): boolean {
-  return loadedTrackId !== null && getTrackIdFromPath(pathname) !== loadedTrackId
+export function shouldShowMiniPlayer(
+  loadedTrackId: number | null,
+  pathname: string,
+  concealed = false,
+): boolean {
+  return !concealed && loadedTrackId !== null && getTrackIdFromPath(pathname) !== loadedTrackId
 }

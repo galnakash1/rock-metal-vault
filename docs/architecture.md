@@ -32,7 +32,8 @@ src/
 │   └── usePlayer.ts          # useSyncExternalStore subscription to the player engine
 │
 ├── utils/
-│   ├── trackUtils.ts         # Pure functions: validate, normalize + enrich, filter, sort, moods, lineup, arena
+│   ├── trackUtils.ts         # Pure functions: validate, normalize + enrich, filter, sort, moods
+│   ├── arenaUtils.ts         # Pure Riff Arena logic: rounds/decoys, blur, scoring, best streak, comparison
 │   ├── trackUtils.test.ts    # Vitest unit tests (utils, enrichment, moods, riff tabs)
 │   ├── setlistUtils.ts       # Setlist toggle/remove, localStorage load/save, festival lineup tiers
 │   ├── setlistUtils.test.ts
@@ -55,7 +56,8 @@ src/
 │   ├── SetlistButton.tsx
 │   ├── FestivalPoster.tsx    # Signature 3
 │   ├── BlindTestGame.tsx     # Signature 4
-│   └── TrackSelect.tsx
+│   ├── HeadToHead.tsx        # Head-to-Head Track Battle (contender cards + comparison table)
+│   └── TrackSelect.tsx       # Searchable track picker
 │
 └── pages/                    # One component per route
     ├── CatalogPage.tsx       # /
@@ -95,9 +97,12 @@ src/
     │   │                   ├── theme switcher (radio group) + <FestivalPoster lineup theme />
     │   │                   └── running order → Remove buttons + Clear Lineup
     │   │
-    │   ├── "/arena"       <ArenaPage tracks status error onRetry>
-    │   │                   ├── <BlindTestGame tracks />
-    │   │                   └── Head-to-Head → <TrackSelect /> × 2 + comparison table
+    │   ├── "/arena"       <ArenaPage tracks status error onRetry isInSetlist onToggleSetlist>
+    │   │                   ├── <BlindTestGame tracks />   (concealed playback via playerEngine)
+    │   │                   └── <HeadToHead tracks isInSetlist onToggleSetlist>
+    │   │                         ├── <TrackSelect /> × 2   (searchable)
+    │   │                         ├── <Contender> × 2 → <PreviewToggle /> + <SetlistButton />
+    │   │                         └── comparison table (compareTracks)
     │   │
     │   └── "*"            <NotFoundPage />
     └── <MiniPlayer />     Now Playing bar — outside <Routes>, so it survives navigation
@@ -120,9 +125,10 @@ playerEngine.ts (module store, outside React): one <audio> + Web Audio graph
 | `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `retryLabel?`, `action?` |
 | `SetlistButton` | "Add to Setlist" / "Remove from Setlist" toggle (label and `aria-label` change with state); calls `preventDefault` + `stopPropagation`, so it never triggers a surrounding card link. `compact` variant on cards | `trackTitle`, `inSetlist`, `onToggle`, `variant?` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large display type), Main Stage underbill, origin flags + styles, and tracks/bands/runtime stats; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
-| `BlindTestGame` | Round flow (start → listen → guess → reveal → next), blurred artwork, 4 option buttons, score/streak | `tracks` |
+| `BlindTestGame` | Round flow (start → listen → guess → reveal → Next Riff), concealed playback through `playerEngine`, artwork unblurring with playback time, 4 option buttons with green/red feedback, speed-based points, streak, persisted best streak, and accuracy; stops a concealed round on unmount | `tracks` |
 | `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled "Signature riff tab" or "Practice riff tab"; highlights the playhead column | `tab: GuitarRiffTab`, `subgenre`, `activeStep: number \| null` |
-| `TrackSelect` | Labelled `<select>` listing catalog tracks (used twice in the Head-to-Head) | `label`, `tracks`, `value`, `onChange` |
+| `TrackSelect` | Searchable picker: a filter box (title/artist, with a match count) narrowing a labelled `<select>`; the current pick stays listed (used twice in the Head-to-Head) | `id`, `label`, `tracks`, `value`, `onChange` |
+| `HeadToHead` | Track A vs Track B: searchable pickers, contender cards (artwork, origin, style, win badges, preview play, setlist toggle), and the comparison table | `tracks`, `isInSetlist`, `onToggleSetlist` |
 
 The first five required components are `Navbar`, `TrackCard`, `FilterBar`, `AudioPreviewPlayer`, and `StatusMessage`. The rest either carry a signature feature or remove duplicated markup.
 
@@ -262,10 +268,11 @@ export interface BlindTestRound {
 }
 
 export interface BlindTestScore {
-  correct: number
+  score: number                  // total points (speed-based)
   played: number
+  correct: number
   streak: number
-  bestStreak: number
+  bestStreak: number             // persisted in localStorage
 }
 
 export type ComparisonWinner = 'a' | 'b' | 'tie' | 'none'
@@ -274,7 +281,8 @@ export interface ComparisonRow {
   label: string                  // e.g. "Duration"
   valueA: string                 // display-ready
   valueB: string
-  winner: ComparisonWinner       // 'none' for non-numeric rows (e.g. explicit rating)
+  winner: ComparisonWinner       // 'none' for rows that aren't a contest (style, tuning…)
+  winnerNote?: string            // badge for the winner, e.g. "Longer" / "Vintage"
 }
 ```
 
@@ -456,10 +464,11 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ### 4 — Riff Blind-Test Challenge
 
-- `buildBlindTestRound(tracks, random)` picks the answer with `pickRandomTrack`, then 3 decoys by **different artists** (so the answer is never ambiguous), and shuffles all 4 with `shuffle(items, random)`. It returns `null` when the catalog has fewer than 4 distinct artists.
-- A plain `<audio>` element (not the Amp Console) starts on the "Start round" click. Its `timeupdate` events drive `elapsed`, and `getArtworkBlur(elapsed)` maps 0 → 30 s to 24px → 0px blur (CSS `filter: blur()`). After a guess, the blur goes to 0.
-- `applyGuess(score, isCorrect)` returns the next `BlindTestScore` (streak resets on a miss; `bestStreak = max`).
-- The Head-to-Head uses `compareTracks(a, b)` to build the comparison table.
+- `buildBlindTestRound(tracks, { random, excludeIds })` picks the answer with `pickRandomTrack` (skipping the last 15 answers, unless that leaves nothing). It then shuffles the catalog and stable-sorts it by similarity (same style +2, same country +1), so decoys are **realistic** but still random among equals. It takes the first 3 with a **different lead artist** (`getLeadArtistKey`, so "BABYMETAL & …" counts as BABYMETAL) and a **different title** (`normalizeTitleKey`), so exactly one option is right. All 4 are shuffled. It returns `null` when fewer than 4 distinct artists exist.
+- **Playback:** the round plays through the global `playerEngine` with `playTrack(answer, { concealed: true })`. The snapshot's `concealed` flag hides the Now Playing bar (`shouldShowMiniPlayer(…, concealed)`), so the title can't leak. On unmount, `BlindTestGame` calls `stop()` only if concealed playback is still running, so a visible Head-to-Head preview keeps playing. "Next Riff" simply plays the next answer, which replaces the old one.
+- **Reveal:** `getArtworkBlur(player.currentTime, player.duration)` maps 0 → 30 s to 24px → 0px (CSS `filter: blur()` with a short transition, and none under `prefers-reduced-motion`). After a guess the blur is 0, and the alt text only names the album once revealed.
+- **Scoring:** `getGuessPoints(isCorrect, elapsed)` gives 100 base + up to 900 for speed (1000 instant, 100 at the end, 0 when wrong). `applyGuess(score, isCorrect, points)` returns the next `BlindTestScore` (a miss resets the streak; `bestStreak = max`). The best streak is saved with `saveBestStreak` under `rmv:arena:best-streak` and loaded lazily on mount.
+- **Head-to-Head:** `HeadToHead` keeps `trackAId` / `trackBId` (defaults: the first track, against the first track by a different artist). `compareTracks(a, b)` builds the rows: Duration (longer wins, "Longer"), Released (earlier wins, "Vintage"; `none` if a year is unknown), plus Style, Origin, Guitar tuning, and Riff tempo from `getTrackRiffTab` (no winner). Only the small `PreviewToggle` buttons subscribe to the player, so the two ~290-option pickers don't re-render during playback.
 
 ## 5b. Music-Data Enrichments
 
@@ -505,12 +514,17 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | `(tracks: Track[]) => OriginCountry[] / Subgenre[] / string[]` | Sorted, de-duplicated option lists for `FilterBar` ("Unknown" country last) | ✅ Task 4 |
 | `DEFAULT_FILTERS` / `hasActiveFilters` | `TrackFilters` / `(filters) => boolean` | Starting/reset filter state (sorted by artist); whether anything narrows the list (sort and blank search don't count) | ✅ Task 5 |
 | `MOOD_CAPSULES` / `matchesMood` | `MoodCapsule[]` / `(track, mood: MoodId) => boolean` | Sonic Mood Capsule definitions and rules (see §5) | ✅ Task 4 |
-| `pickRandomTrack` | `(tracks: Track[], random?: () => number) => Track \| null` | Injectable RNG (defaults to `Math.random`) for deterministic tests; `null` for an empty list | Task 7 |
-| `shuffle` | `<T>(items: T[], random?: () => number) => T[]` | Fisher–Yates on a copy | Task 7 |
-| `buildBlindTestRound` | `(tracks: Track[], random?: () => number) => BlindTestRound \| null` | Answer + 3 decoys by distinct artists, shuffled | Task 7 |
-| `getArtworkBlur` | `(elapsedSec: number, totalSec?: number, maxBlurPx?: number) => number` | Linear 24px → 0px over 30s, clamped | Task 7 |
-| `applyGuess` | `(score: BlindTestScore, isCorrect: boolean) => BlindTestScore` | Score/streak/best-streak update | Task 7 |
-| `compareTracks` | `(a: Track, b: Track) => ComparisonRow[]` | Rows for duration, release year, explicit rating, album track count, each with a winner | Task 7 |
+
+### `src/utils/arenaUtils.ts` (tests in `trackUtils.test.ts`)
+
+| Function / constant | Signature | Behavior | Test |
+| --- | --- | --- | --- |
+| `shuffle` / `pickRandomTrack` | `(items, random?) => T[]` / `(tracks, random?) => Track \| null` | Fisher–Yates on a copy / random pick; injectable RNG for deterministic tests | ✅ Task 7 |
+| `buildBlindTestRound` | `(tracks, { random?, excludeIds? }) => BlindTestRound \| null` | Answer + 3 realistic decoys (style/country first) by different lead artists and titles, shuffled | ✅ Task 7 |
+| `getArtworkBlur` | `(elapsedSec, totalSec?, maxBlurPx?) => number` | Linear 24px → 0px over 30s, clamped; NaN-safe | ✅ Task 7 |
+| `getGuessPoints` / `applyGuess` / `INITIAL_BLIND_TEST_SCORE` | `(isCorrect, elapsedSec, totalSec?) => number` / `(score, isCorrect, points) => BlindTestScore` | Speed scoring (1000 → 100, 0 when wrong); streak / best-streak update | ✅ Task 7 |
+| `parseBestStreak` / `loadBestStreak` / `saveBestStreak` | `(raw) => number` / `(storage) => number` / `(storage, n) => boolean` | Best streak in `localStorage` (`rmv:arena:best-streak`), never throws | ✅ Task 7 |
+| `compareTracks` | `(a: Track, b: Track) => ComparisonRow[]` | Duration (longer) and Released (earlier) contests, plus style, origin, tuning, tempo | ✅ Task 7 |
 
 ### `src/utils/artistMetadata.ts`
 

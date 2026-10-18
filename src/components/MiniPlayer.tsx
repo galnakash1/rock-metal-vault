@@ -13,7 +13,7 @@ function MiniPlayer() {
   const player = usePlayer()
   const { track } = player
 
-  if (!track || !shouldShowMiniPlayer(track.id, pathname)) return null
+  if (!track || !shouldShowMiniPlayer(track.id, pathname, player.concealed)) return null
 
   const progress = player.duration > 0 ? Math.min(player.currentTime / player.duration, 1) : 0
   const detailPath = `/tracks/${track.id}`

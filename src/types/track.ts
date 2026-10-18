@@ -186,3 +186,29 @@ export interface FestivalLineup {
   artistCount: number
   totalRuntimeMs: number
 }
+
+// ---------- Riff Arena ----------
+
+/** One Blind-Test round: the hidden answer plus 4 shuffled options (answer + 3 decoys). */
+export interface BlindTestRound {
+  answer: Track
+  options: Track[]
+}
+
+export interface BlindTestScore {
+  score: number // total points
+  played: number
+  correct: number
+  streak: number // current run of correct guesses
+  bestStreak: number // persisted in localStorage
+}
+
+export type ComparisonWinner = 'a' | 'b' | 'tie' | 'none' // 'none' = not a contest (e.g. style)
+
+export interface ComparisonRow {
+  label: string // e.g. "Duration"
+  valueA: string // display-ready
+  valueB: string
+  winner: ComparisonWinner
+  winnerNote?: string // badge for the winning side, e.g. "Longer"
+}

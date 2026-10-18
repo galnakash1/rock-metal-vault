@@ -109,7 +109,7 @@
 
 ## Catalog expansion (between Tasks 6 and 7) — Global bands, smarter fetching
 
-- [ ] **Goal:** A rich global spectrum of rock & metal countries, scenes, and styles, without hitting Apple's rate limit.
+- [x] **Goal:** A rich global spectrum of rock & metal countries, scenes, and styles, without hitting Apple's rate limit.
 - **Files:** `src/types/track.ts`, `src/types/riff.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/utils/trackUtils.ts`, `src/utils/setlistUtils.ts`, `src/utils/catalogCache.ts` (+ test), `src/api/itunes.ts` (+ test), `src/App.tsx`, `src/utils/trackUtils.test.ts`
 - **Steps:**
   1. Add ~60 international bands (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada) with their styles and Apple artist ids, plus 10 new countries and 14 new styles (with riff families for black metal and doom).
@@ -134,13 +134,14 @@
 ## Task 7 — Riff Arena: Blind-Test Challenge and Head-to-Head
 
 - [ ] **Goal:** Add the interactive guessing game and track comparison.
-- **Files:** `src/pages/ArenaPage.tsx`, `src/components/BlindTestGame.tsx`, `src/components/TrackSelect.tsx`, `src/types/track.ts`, `src/utils/trackUtils.ts` (+ tests)
+- **Files:** `src/pages/ArenaPage.tsx`, `src/components/BlindTestGame.tsx`, `src/components/HeadToHead.tsx`, `src/components/TrackSelect.tsx`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts`, `src/types/track.ts`, `src/App.tsx`, `src/App.css`, `src/utils/trackUtils.test.ts`
 - **Steps:**
-  1. Add the `BlindTestRound`, `BlindTestScore`, and `ComparisonRow` types. Add `pickRandomTrack`, `shuffle`, `buildBlindTestRound` (injectable RNG), `getArtworkBlur`, `applyGuess`, and `compareTracks`, plus unit tests.
-  2. Build `BlindTestGame` (signature ④): "Start round" plays a random preview; the artwork unblurs as the preview plays (`timeupdate` → `getArtworkBlur`); 4 option buttons (green when correct, red when wrong, then a full reveal); score, streak, and best-streak display; and a "Next round" button. The audio stops on unmount.
-  3. Head-to-Head: two `TrackSelect`s (default to the first two tracks) and a side-by-side table showing duration, release year, explicit rating, and album track count, with the winner highlighted in each numeric row.
+  1. Add the `BlindTestRound`, `BlindTestScore`, and `ComparisonRow` types, and `arenaUtils.ts`: `shuffle` / `pickRandomTrack` (injectable RNG), `buildBlindTestRound` (realistic decoys, recent-answer exclusion), `getArtworkBlur`, `getGuessPoints` (speed scoring), `applyGuess`, best-streak `localStorage` helpers, and `compareTracks`, plus unit tests.
+  2. Add **concealed** playback to the player engine so Blind-Test rounds don't appear in the Now Playing bar.
+  3. Build `BlindTestGame` (signature ④): a concealed preview through `playerEngine`, artwork unblurring from 24px to 0px with the playback time, 4 option buttons (green/red feedback and a reveal), speed-based points, streak and persisted best streak, "Next Riff", and stopping on leave.
+  4. Build `HeadToHead` with two searchable `TrackSelect`s, contender cards (preview + setlist toggle), and a comparison table highlighting the longer track and the earlier release, plus tuning and tempo from the riff tab.
   4. Handle the loading and error states (and a catalog with fewer than 4 distinct artists) with `StatusMessage`.
-- **Done when:** a round plays a preview with progressively sharper artwork; answering updates the score and streak correctly; picking any two tracks updates the comparison immediately with correct highlights; and `npm test` passes, including the new tests.
+- **Done when:** a round plays a hidden preview with progressively sharper artwork; answering shows green/red feedback and updates the score, streak, and saved best streak; leaving the arena stops the round; picking any two tracks updates the comparison immediately with correct highlights; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 

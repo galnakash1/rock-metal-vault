@@ -139,7 +139,14 @@ function App() {
           <Route
             path="/arena"
             element={
-              <ArenaPage tracks={tracks} status={status} error={error} onRetry={handleRetry} />
+              <ArenaPage
+                tracks={tracks}
+                status={status}
+                error={error}
+                onRetry={handleRetry}
+                isInSetlist={isInSetlist}
+                onToggleSetlist={toggleSetlistTrack}
+              />
             }
           />
           <Route path="*" element={<NotFoundPage />} />

@@ -1,16 +1,24 @@
+import { useMemo } from 'react'
+import BlindTestGame from '../components/BlindTestGame'
+import HeadToHead from '../components/HeadToHead'
 import StatusMessage from '../components/StatusMessage'
 import type { FetchStatus, Track } from '../types/track'
+import { sortTracks } from '../utils/trackUtils'
 
 export interface ArenaPageProps {
   tracks: Track[]
   status: FetchStatus
   error: string | null
   onRetry: () => void
+  isInSetlist: (trackId: number) => boolean
+  onToggleSetlist: (track: Track) => void
 }
 
-function ArenaPage({ tracks, status, error, onRetry }: ArenaPageProps) {
+function ArenaPage({ tracks, status, error, onRetry, isInSetlist, onToggleSetlist }: ArenaPageProps) {
+  const sortedTracks = useMemo(() => sortTracks(tracks, 'artist-asc'), [tracks])
+
   return (
-    <section>
+    <section className="arena">
       <header className="page-header">
         <h1>Riff Arena</h1>
         <p className="page-summary">
@@ -32,11 +40,24 @@ function ArenaPage({ tracks, status, error, onRetry }: ArenaPageProps) {
         />
       )}
 
-      {status === 'success' && (
+      {status === 'success' && tracks.length === 0 && (
         <StatusMessage
           variant="empty"
-          message={`${tracks.length} tracks are warming up — the arena opens soon.`}
+          title="No contenders yet"
+          message="The Vault is empty right now, so there's nothing to battle."
+          onRetry={onRetry}
         />
+      )}
+
+      {status === 'success' && tracks.length > 0 && (
+        <>
+          <BlindTestGame tracks={tracks} />
+          <HeadToHead
+            tracks={sortedTracks}
+            isInSetlist={isInSetlist}
+            onToggleSetlist={onToggleSetlist}
+          />
+        </>
       )}
     </section>
   )

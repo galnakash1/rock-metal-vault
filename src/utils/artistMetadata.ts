@@ -263,6 +263,11 @@ export const SPOTLIGHT_ARTIST_IDS: readonly number[] = ARTIST_ENTRIES.flatMap(
 // Splits "Bad Omens, Let's Eat Grandma & Chief" / "X feat. Y" into the lead artist.
 const COLLABORATION_SEPARATOR = /\s*(?:,|&|\bfeat\.?|\bft\.?|\bwith\b|\bx\b)\s*/i
 
+/** Normalized key of the lead artist ("BABYMETAL & Electric Callboy" → "babymetal"). */
+export function getLeadArtistKey(artistName: string): string {
+  return normalizeArtistKey(artistName.split(COLLABORATION_SEPARATOR)[0] ?? artistName)
+}
+
 const toMetadata = ({ originCountry, subgenre }: CuratedArtist): ArtistMetadata => ({
   originCountry,
   subgenre,

@@ -19,6 +19,8 @@ export type AmpEngineState = 'idle' | 'active' | 'unavailable'
 
 export interface PlayerSnapshot {
   track: Track | null // the loaded preview (playing or paused), null when stopped
+  /** True for Blind-Test playback: the answer must not be revealed (e.g. by the mini-player). */
+  concealed: boolean
   isPlaying: boolean
   currentTime: number // seconds
   duration: number // seconds
@@ -48,6 +50,7 @@ const MIN_TIME_STEP = 1 / 30 // don't notify subscribers for sub-frame time chan
 
 let snapshot: PlayerSnapshot = {
   track: null,
+  concealed: false,
   isPlaying: false,
   currentTime: 0,
   duration: PREVIEW_SECONDS,
@@ -212,12 +215,19 @@ async function ensureGraph(element: HTMLAudioElement): Promise<void> {
 
 // ---------- Actions ----------
 
+export interface PlayOptions {
+  /** Hide what's playing from the UI (Blind-Test rounds). */
+  concealed?: boolean
+}
+
 /** Loads (if needed) and plays a track's preview. Switching tracks replaces the current one. */
-export async function playTrack(track: Track): Promise<void> {
+export async function playTrack(track: Track, { concealed = false }: PlayOptions = {}): Promise<void> {
   const element = getAudio()
   if (snapshot.track?.id !== track.id) {
     element.src = track.previewUrl
-    update({ track, isPlaying: false, currentTime: 0, duration: PREVIEW_SECONDS, error: null })
+    update({ track, concealed, isPlaying: false, currentTime: 0, duration: PREVIEW_SECONDS, error: null })
+  } else if (snapshot.concealed !== concealed) {
+    update({ concealed })
   }
   await ensureGraph(element)
   try {
@@ -234,7 +244,7 @@ export function pause(): void {
   audio?.pause()
 }
 
-/** Play/pause for `track`: resumes or pauses it if it's loaded, otherwise starts it. */
+/** Play/pause for `track` (visible playback): resumes or pauses it if loaded, otherwise starts it. */
 export function togglePlay(track: Track): Promise<void> {
   if (snapshot.track?.id === track.id && snapshot.isPlaying) {
     pause()
@@ -259,7 +269,14 @@ export function stop(): void {
     audio.removeAttribute('src')
     audio.load()
   }
-  update({ track: null, isPlaying: false, currentTime: 0, duration: PREVIEW_SECONDS, error: null })
+  update({
+    track: null,
+    concealed: false,
+    isPlaying: false,
+    currentTime: 0,
+    duration: PREVIEW_SECONDS,
+    error: null,
+  })
 }
 
 /** Switches the EQ preset; a playing preview changes sound immediately, without restarting. */

@@ -265,3 +265,31 @@ Tested the Festival Lineup & Poster Builder (/setlist) and verified the expanded
 > Please implement these 3 improvements now, update `docs/architecture.md` and unit tests as needed, and verify that `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`. Stop when done and summarize in 3 sentences.
 > </pasted_content id="5dbb">
 Verified the 3 UX fixes in the browser: initial load time dropped to ~60ms via localStorage caching and progressive loading, filters persist across navigation via state lifting to App.tsx, and audio playback continues seamlessly via persistent playerEngine and MiniPlayer. Marked UX fixes as done in tasks.md.
+## 2026-10-18
+
+**17:33 · claude**
+
+> <pasted_content id="5dbb">
+> The UX improvements are committed and tested. Now please proceed with **Task 7** from `tasks.md` ONLY:
+> 
+> Build `src/pages/ArenaPage.tsx` featuring our two interactive experiences:
+> 
+> 1. **Riff Blind-Test Challenge (Audio Guessing Game):**
+>    - Gameplay: When the user starts a round, the game randomly selects a target track from the catalog with a valid `previewUrl` and plays its audio through our `playerEngine`.
+>    - Progressive Artwork Reveal: Album artwork is displayed with heavy CSS blur (e.g. `blur(24px)`) that gradually unblurs down to `blur(0px)` over the 30-second duration.
+>    - Multiple Choice: Provide 4 clean choice buttons (1 correct track and 3 realistic distractors from the catalog, randomized).
+>    - Feedback & Scoring: Instant visual feedback on click (green for correct, red for incorrect while highlighting the correct answer). Award points based on how quickly they guessed, track current win streak, and persist their `bestStreak` in `localStorage`.
+>    - Provide a "Next Riff" button to trigger the next challenge round, and automatically stop audio if navigating away or restarting.
+> 
+> 2. **Head-to-Head Track Battle (Comparison Tool):**
+>    - Let the user select any two tracks from the catalog using searchable/dropdown selectors (`Track A` vs `Track B`).
+>    - Render a side-by-side comparison card displaying artwork, artist, title, origin flag & country, style/subgenre, formatted duration (highlighting the longer track), release year (highlighting the earlier vintage release), and guitar tuning / BPM from `getTrackRiffTab`.
+>    - Provide direct preview play triggers for both tracks and setlist toggle buttons.
+> 
+> 3. **Testing & Quality:**
+>    - Add pure helper functions for game logic (distractor generation, scoring, and comparison metrics) in `src/utils/` and unit test them in `src/utils/trackUtils.test.ts`.
+>    - Ensure full accessibility, zero `any`, and verify `npm test`, `npm run build`, and `npm run lint` all pass with zero errors.
+> 
+> Stop after completing Task 7 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Tested the Arena page (/arena) in the browser: played the Riff Blind-Test game (verified progressive unblur, concealed mini-player, scoring, and streak persistence) and compared tracks side-by-side in Head-to-Head battle. Marked Task 7 as done in tasks.md.

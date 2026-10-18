@@ -66,4 +66,9 @@ describe('Now Playing mini-player visibility', () => {
     expect(shouldShowMiniPlayer(574050602, '/tracks/574050602')).toBe(false)
     expect(shouldShowMiniPlayer(null, '/')).toBe(false) // nothing loaded
   })
+
+  it('stays hidden during concealed Blind-Test playback so the answer is not revealed', () => {
+    expect(shouldShowMiniPlayer(574050602, '/arena', true)).toBe(false)
+    expect(shouldShowMiniPlayer(574050602, '/arena', false)).toBe(true)
+  })
 })

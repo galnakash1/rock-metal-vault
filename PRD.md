@@ -118,11 +118,12 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ### d) `/arena` — Riff Arena
 
 - **Riff Blind-Test Challenge** (signature feature 4):
-  - "Start round" picks a random catalog track and plays its 30-second preview.
-  - The album artwork starts **heavily blurred** and **progressively unblurs** as the preview plays. It is fully revealed once the user answers.
-  - **4 multiple-choice buttons** ("Title — Artist"): the correct track plus 3 decoys by different artists, in random order.
-  - After a guess, the correct button turns green and a wrong pick turns red. **Score**, **current streak**, and **best streak** update, and a "Next round" button appears.
-- **Head-to-Head comparison:** two selectors let the user pick any two tracks from the catalog. Their duration (`mm:ss`), release year, explicit rating, and album track count appear side by side. The "winning" value in each numeric row is highlighted, and picking the same track twice is handled gracefully.
+  - "Start the challenge" picks a random catalog track (avoiding the last 15 answers) and plays its 30-second preview through the app's player. The preview is **concealed**: the Now Playing bar stays hidden so it can't give the answer away.
+  - The album artwork starts at **`blur(24px)`** and **progressively unblurs to `blur(0px)`** over the 30-second preview. It is fully revealed once the user answers; until then its alt text doesn't name it.
+  - **4 multiple-choice buttons** ("Title" + artist): the correct track plus 3 **realistic decoys**, preferring the answer's style and country, all by different artists and with different titles, in random order.
+  - After a guess, the correct button turns green, a wrong pick turns red, and the answer is revealed with a link to its page. **Points reward speed** (1000 for an instant correct guess, down to 100 at the end of the preview; 0 when wrong). **Score**, **current streak**, **best streak** (saved in `localStorage`), and accuracy update, and a **"Next Riff"** button starts the next round.
+  - Leaving the arena or starting the next round stops the previous riff.
+- **Head-to-Head Track Battle:** two **searchable** pickers (Track A vs Track B) let the user choose any two catalog tracks. Side-by-side cards show artwork, title, artist, origin flag and country, and style, with a **preview play button** and a **setlist toggle** each. A comparison table lists duration (the **longer** track is highlighted), release year (the **earlier, vintage** release is highlighted), style, origin, guitar tuning, and riff tempo (from the riff tab). Picking the same track twice is handled gracefully.
 
 ### e) `*` — 404 Not Found
 
@@ -151,8 +152,8 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 13. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
 14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Main Stage acts below, origin flags and styles, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
 15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear setlist", **I see** the poster and runtime update immediately.
-16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** whether I was right, along with my updated score and streak.
-17. **When I** pick two tracks in the Head-to-Head section, **I see** their duration, release year, explicit rating, and album track count side by side, with the higher value in each row highlighted.
+16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** green for the right answer (and red for my wrong pick), the points I earned for my speed, and my updated score, streak, and saved best streak.
+17. **When I** pick two tracks in the Head-to-Head section, **I see** them side by side with origin, style, duration, release year, tuning, and tempo, with the longer track and the earlier release highlighted.
 18. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
 19. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
 

@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import mockData from '../data/mockTracks.json'
+import {
+  INITIAL_BLIND_TEST_SCORE,
+  applyGuess,
+  buildBlindTestRound,
+  compareTracks,
+  getArtworkBlur,
+  getGuessPoints,
+  loadBestStreak,
+  parseBestStreak,
+  pickRandomTrack,
+  saveBestStreak,
+  shuffle,
+} from './arenaUtils'
 import type { ITunesTrackRaw, Subgenre, Track, TrackFilters } from '../types/track'
 import { ARTIST_ENTRIES, COUNTRY_FLAGS, SPOTLIGHT_ARTIST_IDS, getArtistMetadata, normalizeArtistKey } from './artistMetadata'
 import {
@@ -653,5 +666,218 @@ describe('getRiffPlayheadIndex', () => {
     expect(getRiffPlayheadIndex(5, 0, 8)).toBeNull()
     expect(getRiffPlayheadIndex(Number.NaN, 120, 8)).toBeNull()
     expect(getRiffPlayheadIndex(-3, 120, 8)).toBe(0)
+  })
+})
+
+// ---------- Riff Arena ----------
+
+/** Deterministic pseudo-random source (LCG) so random rounds are reproducible in tests. */
+const seeded = (seed: number) => {
+  let state = seed
+  return () => {
+    state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296
+    return state / 4_294_967_296
+  }
+}
+const ids = (list: readonly Track[]) => list.map((track) => track.id)
+
+describe('shuffle & pickRandomTrack', () => {
+  it('returns a permutation without mutating the input, reproducibly for a seed', () => {
+    const before = ids(tracks)
+    const shuffled = shuffle(tracks, seeded(7))
+    expect([...ids(shuffled)].sort()).toEqual([...before].sort())
+    expect(ids(tracks)).toEqual(before)
+    expect(ids(shuffle(tracks, seeded(7)))).toEqual(ids(shuffled))
+    expect(shuffle([], seeded(1))).toEqual([])
+  })
+
+  it('picks by the random value and handles an empty catalog', () => {
+    expect(pickRandomTrack(tracks, () => 0)).toBe(tracks[0])
+    expect(pickRandomTrack(tracks, () => 0.999)).toBe(tracks.at(-1))
+    expect(pickRandomTrack([], () => 0.5)).toBeNull()
+  })
+})
+
+describe('buildBlindTestRound (distractor generation)', () => {
+  it('offers 4 options: the answer once plus 3 decoys by different artists', () => {
+    for (let seed = 1; seed <= 25; seed += 1) {
+      const round = buildBlindTestRound(tracks, { random: seeded(seed) })
+      if (!round) throw new Error('expected a round')
+      expect(round.options).toHaveLength(4)
+      expect(round.options.filter((option) => option.id === round.answer.id)).toHaveLength(1)
+      expect(new Set(round.options.map((option) => option.artist)).size).toBe(4)
+    }
+  })
+
+  it('randomizes where the correct answer appears', () => {
+    const positions = new Set<number>()
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const round = buildBlindTestRound(tracks, { random: seeded(seed) })
+      if (round) positions.add(round.options.findIndex((option) => option.id === round.answer.id))
+    }
+    expect(positions.size).toBeGreaterThan(2)
+  })
+
+  it('prefers realistic decoys from the same style', () => {
+    const target = makeTrack({ id: 100, artist: 'Answer Band', title: 'Target', subgenre: 'Metalcore' })
+    const sameStyle = [1, 2, 3].map((n) =>
+      makeTrack({ id: 200 + n, artist: `Core Band ${n}`, title: `Core ${n}`, subgenre: 'Metalcore' }),
+    )
+    const otherStyle = [1, 2, 3, 4].map((n) =>
+      makeTrack({ id: 300 + n, artist: `Rock Band ${n}`, title: `Rock ${n}`, subgenre: 'Classic Rock' }),
+    )
+    const catalog = [target, ...otherStyle, ...sameStyle]
+    const excludeIds = new Set(ids(catalog).filter((id) => id !== target.id)) // force the answer
+    const round = buildBlindTestRound(catalog, { random: seeded(3), excludeIds })
+    expect(round?.answer.id).toBe(target.id)
+    const decoys = round?.options.filter((option) => option.id !== target.id) ?? []
+    expect(decoys.every((decoy) => decoy.subgenre === 'Metalcore')).toBe(true)
+  })
+
+  it('never uses a decoy by the same lead artist or with the same song title', () => {
+    const target = makeTrack({ id: 1, artist: 'BABYMETAL', title: 'Gimme Chocolate!!' })
+    const catalog = [
+      target,
+      makeTrack({ id: 2, artist: 'BABYMETAL & Electric Callboy', title: 'RATATATA' }), // same lead
+      makeTrack({ id: 3, artist: 'Cover Band', title: 'Gimme Chocolate!! (Live)' }), // same title
+      makeTrack({ id: 4, artist: 'Band A', title: 'A' }),
+      makeTrack({ id: 5, artist: 'Band B', title: 'B' }),
+      makeTrack({ id: 6, artist: 'Band C', title: 'C' }),
+    ]
+    const excludeIds = new Set([2, 3, 4, 5, 6])
+    const round = buildBlindTestRound(catalog, { random: seeded(9), excludeIds })
+    expect(ids(round?.options ?? []).sort()).toEqual([1, 4, 5, 6])
+  })
+
+  it('skips recently played answers, falling back when everything was played', () => {
+    const recent = new Set(ids(tracks).slice(0, 9))
+    for (let seed = 1; seed <= 10; seed += 1) {
+      expect(buildBlindTestRound(tracks, { random: seeded(seed), excludeIds: recent })?.answer.id).toBe(
+        tracks[9]?.id,
+      )
+    }
+    expect(buildBlindTestRound(tracks, { random: seeded(1), excludeIds: new Set(ids(tracks)) })).not.toBeNull()
+  })
+
+  it('returns null when fewer than 4 different artists exist', () => {
+    const tooFew = [
+      makeTrack({ id: 1, artist: 'A', title: 'One' }),
+      makeTrack({ id: 2, artist: 'A', title: 'Two' }),
+      makeTrack({ id: 3, artist: 'B', title: 'Three' }),
+      makeTrack({ id: 4, artist: 'C', title: 'Four' }),
+    ]
+    expect(buildBlindTestRound(tooFew, { random: seeded(1) })).toBeNull()
+    expect(buildBlindTestRound([], { random: seeded(1) })).toBeNull()
+  })
+})
+
+describe('getArtworkBlur (progressive reveal)', () => {
+  it('unblurs linearly from 24px to 0px over the 30s preview, clamped', () => {
+    expect(getArtworkBlur(0)).toBe(24)
+    expect(getArtworkBlur(15)).toBe(12)
+    expect(getArtworkBlur(7.5)).toBe(18)
+    expect(getArtworkBlur(30)).toBe(0)
+    expect(getArtworkBlur(45)).toBe(0)
+    expect(getArtworkBlur(-2)).toBe(24)
+    expect(getArtworkBlur(Number.NaN)).toBe(24)
+  })
+})
+
+describe('getGuessPoints & applyGuess (scoring)', () => {
+  it('rewards faster correct guesses: 1000 instantly down to 100 at the end, 0 when wrong', () => {
+    expect(getGuessPoints(true, 0)).toBe(1000)
+    expect(getGuessPoints(true, 15)).toBe(550)
+    expect(getGuessPoints(true, 30)).toBe(100)
+    expect(getGuessPoints(true, 99)).toBe(100)
+    expect(getGuessPoints(false, 0)).toBe(0)
+    expect(getGuessPoints(true, 5)).toBeGreaterThan(getGuessPoints(true, 6))
+  })
+
+  it('builds a streak, resets it on a miss, and keeps the best streak', () => {
+    let score = { ...INITIAL_BLIND_TEST_SCORE, bestStreak: 1 }
+    score = applyGuess(score, true, 900)
+    score = applyGuess(score, true, 700)
+    expect(score).toEqual({ score: 1600, played: 2, correct: 2, streak: 2, bestStreak: 2 })
+    score = applyGuess(score, false, 0)
+    expect(score).toEqual({ score: 1600, played: 3, correct: 2, streak: 0, bestStreak: 2 })
+    expect(INITIAL_BLIND_TEST_SCORE.played).toBe(0) // never mutated
+  })
+})
+
+describe('best streak persistence', () => {
+  it('parses only non-negative integers', () => {
+    expect(parseBestStreak('7')).toBe(7)
+    expect(parseBestStreak(' 12 ')).toBe(12)
+    for (const raw of [null, '', '-3', '2.5', 'abc', '1e3']) expect(parseBestStreak(raw)).toBe(0)
+  })
+
+  it('round-trips through storage and survives blocked storage', () => {
+    const data = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+    }
+    expect(saveBestStreak(storage, 5)).toBe(true)
+    expect(loadBestStreak(storage)).toBe(5)
+    const blocked = {
+      getItem: (): string | null => {
+        throw new Error('blocked')
+      },
+      setItem: (): void => {
+        throw new Error('blocked')
+      },
+    }
+    expect(loadBestStreak(blocked)).toBe(0)
+    expect(saveBestStreak(blocked, 5)).toBe(false)
+    expect(loadBestStreak(null)).toBe(0)
+  })
+})
+
+describe('compareTracks (Head-to-Head metrics)', () => {
+  const row = (label: string, a: Track, b: Track) => compareTracks(a, b).find((r) => r.label === label)
+
+  it('highlights the longer track and the earlier (vintage) release', () => {
+    const puppets = byTitle('Master of Puppets') // 8:35, 1986
+    const paranoid = byTitle('Paranoid') // 2:48, 1970
+    expect(row('Duration', puppets, paranoid)).toMatchObject({
+      valueA: '08:35',
+      valueB: '02:48',
+      winner: 'a',
+      winnerNote: 'Longer',
+    })
+    expect(row('Released', puppets, paranoid)).toMatchObject({
+      valueA: '1986',
+      valueB: '1970',
+      winner: 'b',
+      winnerNote: 'Vintage',
+    })
+  })
+
+  it('shows style, origin, tuning and tempo from the riff tab without picking a winner', () => {
+    const rows = compareTracks(byTitle('Just Pretend'), byTitle('Back In Black'))
+    expect(rows.map((r) => r.label)).toEqual([
+      'Duration',
+      'Released',
+      'Style',
+      'Origin',
+      'Guitar tuning',
+      'Riff tempo',
+    ])
+    expect(rows.find((r) => r.label === 'Guitar tuning')).toMatchObject({
+      valueA: 'Drop C (C G C F A D)',
+      valueB: 'E Standard (E A D G B E)',
+      winner: 'none',
+    })
+    expect(rows.find((r) => r.label === 'Riff tempo')?.valueB).toBe('≈ 94 BPM')
+    expect(rows.find((r) => r.label === 'Origin')?.valueB).toBe('🇦🇺 Australia')
+  })
+
+  it('reports ties for identical values and no contest for unknown years', () => {
+    const track = byTitle('Doomsday')
+    expect(compareTracks(track, track).filter((r) => r.winner !== 'none').map((r) => r.winner)).toEqual([
+      'tie',
+      'tie',
+    ])
+    expect(row('Released', track, makeTrack({ releaseYear: null }))?.winner).toBe('none')
   })
 })

@@ -321,3 +321,30 @@ Tested the Arena page (/arena) in the browser: played the Riff Blind-Test game (
 > Stop when done and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Tested the 5-round + 3 amp-tube lives game loop in /arena: verified both "Set Complete!" victory and "Game Over — Amp Blown!" paths, rank titles, round-by-round recap with Setlist buttons, and High Score persistence. Marked Blind-Test set loop as done in tasks.md.
+**18:00 · claude**
+
+> <pasted_content id="5dbb">
+> The 5-round Riff Blind-Test game loop and Final Scoreboard are verified and committed. Now please proceed with **Task 8** from `tasks.md` ONLY:
+> 
+> Craft and polish our custom, responsive Rock/Metal dark-mode CSS aesthetic across the entire application (using clean plain CSS with CSS custom properties and zero heavy UI libraries, satisfying our course rubric):
+> 
+> 1. **Design System & Visual Identity (`src/index.css` & `src/App.css`):**
+>    - Refine our dark obsidian/charcoal palette, subtle metallic borders, atmospheric gradients, and glowing crimson/amber stage accents.
+>    - Ensure crisp typographic hierarchy (bold display headers for titles/posters, readable body text, and clean monospace alignment for the 6-string guitar tabs, durations, and scores).
+>    - Add smooth micro-interactions on cards, mood pills, EQ preset buttons, and lit/blown amp tubes in the Arena, while respecting `prefers-reduced-motion`.
+> 
+> 2. **Page-by-Page Polish:**
+>    - **Navbar & MiniPlayer:** Translucent blurred header and pinned bottom mini-player with clear active indicators and safe bottom padding so the mini-player never covers page content or footer buttons.
+>    - **CatalogPage & FilterBar:** Responsive card grid with consistent artwork aspect ratios, neat country/style badges, and an intuitive filter toolbar.
+>    - **TrackDetailPage:** Tactile hardware-amp feel for the Amp Console (glowing active EQ preset buttons, recessed visualizer screen) paired cleanly with the scrollable/aligned 6-string Guitar Riff Tab viewer.
+>    - **SetlistPage (Festival Poster):** Make the 3 poster themes (`Foggy Woodland`, `Blood Moon`, `Vintage Tour`) visually distinct and atmospheric, with unmistakable tiered typography separating HEADLINERS from UNDERBILL acts.
+>    - **ArenaPage:** High-contrast stage frame for the Riff Blind-Test (glowing amp tube lives, dramatic Final Scoreboard banner and rank badge, clean recap rows) and well-aligned Head-to-Head comparison cards.
+> 
+> 3. **Strict Mobile & Responsive Verification:**
+>    - Test every route (`/`, `/tracks/:id`, `/setlist` with all 3 themes, `/arena` during gameplay and on the Final Scoreboard, and `*` 404) at **375px** (mobile), **768px** (tablet), and **1280px** (desktop) in headless Chrome.
+>    - Guarantee zero horizontal scrollbars (`scrollWidth <= clientWidth`) at 375px across all pages, including the 6-string guitar tab panel and comparison table.
+>    - Verify that `npm test`, `npm run build`, and `npm run lint` all pass with zero errors and zero `any`.
+> 
+> Stop after completing Task 8 and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Reviewed the new dark-mode Rock/Metal CSS design across all routes on desktop and mobile viewports (checked the brushed-metal Amp Console, sticky guitar tab strings, all 3 festival poster themes, and flickering/cracked amp tubes in Arena). Marked Task 8 as done in tasks.md.

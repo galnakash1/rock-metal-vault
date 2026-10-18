@@ -618,7 +618,33 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 
 ## 8. Styling
 
-- Plain CSS only: `index.css` holds theme tokens (CSS custom properties for colors, spacing, and fonts), and `App.css` holds layout and component styles.
-- Dark Rock/Metal look: near-black background, steel greys, and a blood-red / amber accent. The Amp Console gets an amp-panel look (knurled-metal border, glowing "tubes" for the bars), and each poster theme overrides tokens under `[data-theme]`.
-- Responsive: CSS Grid with `auto-fill, minmax(...)` for the card grid; a single-column layout and a wrapping Navbar below about 600px. The visualizer canvas scales to its container width.
-- Accessibility: visible `:focus-visible` outlines, sufficient contrast, labelled controls (`aria-pressed` on pills and presets), and `prefers-reduced-motion` respected for hover animations and the unblur transition.
+- **Plain CSS only, no UI library.** `index.css` holds the design tokens and base styles; `App.css` holds component styles, in sections that follow the pages. The only external asset is the **Oswald** display face (Google Fonts, `display=swap`, Impact fallback). Body text uses the system UI font and numbers/tabs use the system monospace stack.
+- **Tokens (`:root`):**
+  - palette: obsidian/charcoal surfaces, steel greys, crimson and amber stage lights, success/danger;
+  - semantic colors (`--surface`, `--surface-raised`, `--surface-sunken`, `--text-strong`, `--accent`…);
+  - metal effects (`--metal-gradient`, `--brushed` texture, inset highlights) and glows;
+  - a type scale with `clamp()` display sizes;
+  - radii, `--gutter`, `--page-max`, `--mini-player-height`;
+  - motion (`--ease-out`, `--duration*`).
+- **Visual identity:**
+  - Pages: a crimson stage-light wash on the page background, Oswald uppercase page titles with a glowing underline, and a translucent blurred sticky navbar with a guitar-pick logo and a glowing active-link bar.
+  - Amp Console: a brushed-metal amp head with corner screws, a recessed visualizer screen, a chrome-red play knob, and EQ switches in a 2 × 2 bank whose LED glows amber when engaged.
+  - Riff tab: mono text in a sunken screen. It scrolls horizontally inside its own frame, with the string names pinned (`position: sticky`).
+  - Arena: the Blind-Test is a spotlit stage with a framed artwork plinth, an LED-style scoreboard, and lives as amp tubes (lit ones glow and flicker, blown ones are dark and cracked). The final banner has rotating light rays and an amber rank badge.
+  - Head-to-Head: colour-coded contender cards (crimson A, amber B) and a fixed-layout comparison table.
+  - Loading: a spinning-vinyl spinner.
+- **Poster themes** override `--poster-*` variables under `[data-theme]`:
+  - Foggy Woodland: mist layers, pine silhouettes, serif type.
+  - Blood Moon: moon glow and stars, red-hot type.
+  - Vintage Tour: halftone cream paper, double ink border, slab type.
+  - Tiered typography: the top headliner is largest, other headliners large, and the Main Stage underbill small and grouped.
+- **Micro-interactions:** card lifts with a crimson glow, mood-pill and option-button lifts, a pressed-in EQ switch, a shake on a wrong answer, tube flicker, and a mini-player slide-in. The global `prefers-reduced-motion: reduce` rule turns all animation and transition durations down to near zero.
+- **Responsive:** fluid `clamp()` spacing and type, and `minmax(min(100%, …), 1fr)` grids with `min-width: 0` on grid children so nothing forces horizontal overflow.
+  - ≤ 900px: the setlist stacks.
+  - ≤ 760px: the arena stacks.
+  - ≤ 720px: the detail page stacks.
+  - ≤ 640px: the navbar links spread across one row, the filter search stacks, and the mini-player hides its EQ badge and time.
+  - ≤ 480px: the Blind-Test options become one column and contender art shrinks.
+  - Verified in headless Chrome at 375 / 768 / 1280px on every route, with no element outside the viewport.
+- **Mini-player safety:** a spacer the height of the bar (`--mini-player-height` + `env(safe-area-inset-bottom)`) follows the page content, and `html:has(.mini-player)` sets `scroll-padding-bottom`, so the pinned bar never covers the last buttons.
+- **Accessibility:** one global amber `:focus-visible` ring, a custom inset focus ring on inputs, sufficient contrast on dark surfaces, labelled controls (`aria-pressed` on pills, presets and theme radios), and screen-reader text kept intact.

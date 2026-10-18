@@ -133,7 +133,7 @@
 
 ## Task 7 — Riff Arena: Blind-Test Challenge and Head-to-Head
 
-- [ ] **Goal:** Add the interactive guessing game and track comparison.
+- [x] **Goal:** Add the interactive guessing game and track comparison.
 - **Files:** `src/pages/ArenaPage.tsx`, `src/components/BlindTestGame.tsx`, `src/components/HeadToHead.tsx`, `src/components/TrackSelect.tsx`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts`, `src/types/track.ts`, `src/App.tsx`, `src/App.css`, `src/utils/trackUtils.test.ts`
 - **Steps:**
   1. Add the `BlindTestRound`, `BlindTestScore`, and `ComparisonRow` types, and `arenaUtils.ts`: `shuffle` / `pickRandomTrack` (injectable RNG), `buildBlindTestRound` (realistic decoys, recent-answer exclusion), `getArtworkBlur`, `getGuessPoints` (speed scoring), `applyGuess`, best-streak `localStorage` helpers, and `compareTracks`, plus unit tests.
@@ -147,7 +147,7 @@
 
 ## Blind-Test set loop (between Tasks 7 and 8) — 5 rounds, 3 lives, Final Scoreboard
 
-- [ ] **Goal:** Give the Riff Blind-Test a clear ending instead of endless rounds.
+- [x] **Goal:** Give the Riff Blind-Test a clear ending instead of endless rounds.
 - **Files:** `src/types/track.ts`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts` (`onTrackEnded`), `src/components/BlindTestGame.tsx`, `src/pages/ArenaPage.tsx`, `src/App.css`, `src/index.css`, `src/utils/trackUtils.test.ts`
 - **Steps:**
   1. Replace the endless score model with `RoundResult[]` plus pure helpers: `summarizeSet`, `getSetStatus` (game-over evaluation), `getRankTitle`, and the all-time records helpers (`load` / `save` / `mergeArenaRecords`), with unit tests.
@@ -159,14 +159,14 @@
 
 ## Task 8 — Dark Rock/Metal theme and responsive design
 
-- [ ] **Goal:** Make it look like a metal album cover, on every screen size.
+- [x] **Goal:** Make it look like a metal album cover, on every screen size.
 - **Files:** `src/index.css`, `src/App.css` (plain CSS only, no UI libraries)
 - **Steps:**
   1. Define theme tokens as CSS custom properties: near-black backgrounds, steel greys, a blood-red / amber accent, and a heavy display font for headings (Google Fonts or a system fallback).
   2. Style the Navbar (sticky; active-link accent), the card grid (`auto-fill, minmax(...)` with hover lift), the FilterBar and mood pills, the detail layout (artwork beside info on desktop, stacked on mobile), the Amp Console panel, the three poster themes, the blind-test and Head-to-Head views, and the status messages.
   3. Add breakpoints for narrow screens (about 375px): a single column, a wrapping Navbar, full-width controls, and no horizontal scroll.
   4. Accessibility polish: `:focus-visible` outlines, sufficient contrast, and `prefers-reduced-motion`.
-- **Done when:** every page uses the consistent dark theme; the layout works at 375px, 768px, and 1440px wide (checked in DevTools) with no horizontal scrolling; and no UI library is in `package.json`.
+- **Done when:** every page uses the consistent dark theme; every route (`/`, `/tracks/:id`, `/setlist` in all 3 themes, `/arena` mid-round and on the Final Scoreboard, and the 404) works at 375px, 768px, and 1280px in headless Chrome with `scrollWidth <= clientWidth` and no element outside the viewport; the mini-player never covers content; no UI library is in `package.json`; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 

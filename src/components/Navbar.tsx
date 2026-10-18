@@ -9,7 +9,7 @@ function Navbar({ setlistCount }: NavbarProps) {
     <header className="navbar">
       <nav className="navbar-inner" aria-label="Main">
         <Link to="/" className="navbar-brand">
-          Rock &amp; Metal Vault
+          Rock <span className="brand-amp">&amp;</span> Metal Vault
         </Link>
         <ul className="navbar-links">
           <li>

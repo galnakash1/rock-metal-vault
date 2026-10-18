@@ -6,6 +6,7 @@ import {
   MAX_SONGS_PER_ARTIST,
   canonicalizeAlbumArtwork,
   capTracksPerArtist,
+  isFeaturedTrack,
   dedupeSongs,
   mergeCatalogTracks,
   parseCatalogCache,
@@ -22,7 +23,7 @@ const lithium = { ...fixtureTrack, title: 'Lithium', artist: 'Nirvana' }
 
 describe('catalog localStorage cache', () => {
   it('uses a versioned key and a multi-hour TTL', () => {
-    expect(CATALOG_CACHE_KEY).toBe('rmv:catalog:v5')
+    expect(CATALOG_CACHE_KEY).toBe('rmv:catalog:v6')
     expect(CATALOG_CACHE_TTL_MS).toBe(6 * 60 * 60 * 1000)
   })
 
@@ -148,6 +149,65 @@ describe('capTracksPerArtist', () => {
     const lp = [...songs('LINKIN PARK', 24, 3000), ...songs('Linkin Park & Guest', 3, 4000)]
     expect(capTracksPerArtist(lp)).toHaveLength(25)
     expect(mergeCatalogTracks(songs('Slayer', 20, 5000), songs('Slayer', 20, 6000))).toHaveLength(25)
+  })
+})
+
+describe('featured releases (Sempiternal, Limp Bizkit, Saliva)', () => {
+  const bmth = (count: number, firstId: number, album: string) =>
+    Array.from({ length: count }, (_, index) => ({
+      ...fixtureTrack,
+      id: firstId + index,
+      artist: 'Bring Me The Horizon',
+      album,
+      title: `${album} song ${firstId + index}`,
+      releaseDate: '2013-04-01T07:00:00Z',
+    }))
+
+  it('recognizes featured track ids and every edition of a featured album', () => {
+    expect(isFeaturedTrack({ id: 1440754477, artist: 'Limp Bizkit', album: 'Significant Other' })).toBe(true)
+    expect(isFeaturedTrack({ id: 1, artist: 'Bring Me The Horizon', album: 'Sempiternal' })).toBe(true)
+    expect(isFeaturedTrack({ id: 2, artist: 'Bring Me The Horizon', album: 'Sempiternal (Deluxe)' })).toBe(true)
+    expect(isFeaturedTrack({ id: 3, artist: 'Bring Me The Horizon', album: 'amo' })).toBe(false)
+    expect(isFeaturedTrack({ id: 4, artist: 'Sempiternal Tribute Band', album: 'Sempiternal' })).toBe(false)
+  })
+
+  it('gives Bring Me The Horizon 35 slots and keeps all of Sempiternal even when it arrives last', () => {
+    const hits = bmth(40, 7000, "That's the Spirit")
+    const sempiternal = bmth(11, 8000, 'Sempiternal')
+    const capped = capTracksPerArtist([...hits, ...sempiternal])
+    expect(capped).toHaveLength(35)
+    expect(capped.filter((track) => track.album === 'Sempiternal')).toHaveLength(11)
+    expect(capped.filter((track) => track.album === "That's the Spirit").map((track) => track.id)).toEqual(
+      hits.slice(0, 24).map((track) => track.id),
+    )
+    // Other bands keep the default 25.
+    const korn = Array.from({ length: 30 }, (_, index) => ({ ...fixtureTrack, id: 9000 + index, artist: 'Korn', title: `k${index}` }))
+    expect(capTracksPerArtist(korn)).toHaveLength(25)
+  })
+
+  it('prefers the featured studio original over another copy of the same song', () => {
+    const soundtrackCopy = {
+      ...fixtureTrack,
+      id: 5,
+      artist: 'Limp Bizkit',
+      title: 'Take A Look Around',
+      album: 'Mission: Impossible 2',
+      releaseDate: '2000-05-01T07:00:00Z', // earlier than the album
+    }
+    const studio = { ...soundtrackCopy, id: 1440843451, album: 'Chocolate Starfish And The Hot Dog Flavored Water', releaseDate: '2000-05-24T07:00:00Z' }
+    expect(dedupeSongs([soundtrackCopy, studio])).toEqual([studio])
+    expect(dedupeSongs([studio, soundtrackCopy])).toEqual([studio])
+  })
+
+  it('shows the standard Sempiternal cover on every Sempiternal song, deluxe copies included', () => {
+    const [deluxe] = bmth(1, 8100, 'Sempiternal (Deluxe)').map((track) => ({ ...track, artworkUrl: 'https://example.com/deluxe.jpg' }))
+    const [standard] = bmth(1, 8200, 'Sempiternal').map((track) => ({ ...track, artworkUrl: 'https://example.com/standard.jpg' }))
+    if (!deluxe || !standard) throw new Error('fixture')
+    const result = canonicalizeAlbumArtwork([deluxe, standard])
+    expect(result.map((track) => [track.album, track.artworkUrl])).toEqual([
+      ['Sempiternal', 'https://example.com/standard.jpg'],
+      ['Sempiternal', 'https://example.com/standard.jpg'],
+    ])
   })
 })
 

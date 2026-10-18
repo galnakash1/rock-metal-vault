@@ -464,3 +464,23 @@ Tested the 661-track studio catalog, lineup playback queue, and 6 poster themes 
 
 > continue
 Verified all 10 improvements in Upgrade 2: instant Back to Vault navigation (~6ms via 48-card chunking), ~980 studio tracks with canonical album covers (verified Nirvana's Lithium on Nevermind), direct TrackCard playback, MiniPlayer EQ switcher, Spotify/YouTube/Apple Music links, World Tour Stops on posters, multi-stage Riff Tournament, the new /builder 10-track diagnostic page, and the new metal stage background. Marked Upgrade 2 as done in tasks.md.
+**22:51 · claude**
+
+> <pasted_content id="5dbb">
+> The 10 improvements look fantastic in the browser. Before we wrap up, please make a quick catalog update in `src/utils/artistMetadata.ts` and `src/api/itunes.ts`:
+> 
+> 1. **Add Limp Bizkit & Saliva:**
+>    - Ensure **Limp Bizkit** (`"United States"`, `"🇺🇸"`, `"Nu-Metal"`, including their Apple artist ID in the flagship/headliner lookup) is fetched with a full set of studio hits (e.g., *Break Stuff*, *Rollin' (Air Raid Vehicle)*, *My Way*, *Take a Look Around*, *Nookie*, *My Generation*, *Behind Blue Eyes*, *Boiler*, *Re-Arranged*).
+>    - Add **Saliva** (`"United States"`, `"🇺🇸"`, `"Nu-Metal"` / `"Hard Rock"`, with their Apple artist ID in the lookup) so their classic studio tracks (*Click Click Boom*, *Always*, *Ladies and Gentlemen*, *Your Disease*, *Survival of the Sickest*, *Rest in Pieces*) are included in the catalog.
+> 
+> 2. **Expand Bring Me The Horizon — Full *Sempiternal* Coverage:**
+>    - Because BMTH has many newer albums (*POST HUMAN*, *amo*, *That's the Spirit*), general artist lookup + the 25-track cap leaves out several tracks from their landmark 2013 album ***Sempiternal***.
+>    - Explicitly include/fetch the studio tracks from ***Sempiternal*** (e.g., *Can You Feel My Heart*, *The House of Wolves*, *Empire (Let Them Sing)*, *Sleepwalking*, *Go to Hell, for Heaven's Sake*, *Shadow Moses*, *And the Snakes Start to Sing*, *Seen It All Before*, *Antivist*, *Crooked Young*, *Hospital for Souls*) and allow Bring Me The Horizon a higher per-artist cap (e.g. 35 tracks) so all of *Sempiternal* is present alongside their other major hits, with consistent canonical *Sempiternal* album artwork.
+> 
+> 3. **Bump Cache & Verify:**
+>    - Bump the `localStorage` catalog cache key version (e.g. to `v6`) so the updated catalog loads immediately.
+>    - Verify in headless Chrome that searching `"Limp Bizkit"`, `"Saliva"`, and `"Sempiternal"` returns all the expected studio tracks, and confirm `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`.
+> 
+> Stop when done and summarize in 3 sentences.
+> </pasted_content id="5dbb">
+Verified that Limp Bizkit (25 tracks), Saliva (9 tracks), and all 11 tracks from Bring Me The Horizon's Sempiternal album load cleanly with original studio artwork (including filtering out "Greatest Hitz"). All 178 unit tests pass.

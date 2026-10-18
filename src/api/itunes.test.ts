@@ -2,16 +2,37 @@ import { describe, expect, it } from 'vitest'
 import {
   DEEP_CATALOG_ARTISTS,
   DEEP_CATALOG_ARTIST_IDS,
+  FEATURED_ALBUMS,
+  FEATURED_TRACK_IDS,
   HEADLINER_ARTIST_IDS,
   SPOTLIGHT_ARTIST_IDS,
 } from '../utils/artistMetadata'
-import { LOOKUP_TIERS, buildLookupUrls, getCatalogRequestUrls } from './itunes'
+import { LOOKUP_TIERS, buildFeaturedLookupUrl, buildLookupUrls, getCatalogRequestUrls } from './itunes'
+
+describe('featured lookup', () => {
+  it('fetches the featured albums and exact studio tracks in one request', () => {
+    const url = buildFeaturedLookupUrl()
+    expect(url).not.toBeNull()
+    expect(getCatalogRequestUrls()).toContain(url)
+    const params = new URL(url ?? '').searchParams
+    expect(params.get('entity')).toBe('song')
+    expect(params.get('limit')).toBe('200')
+    const ids = (params.get('id') ?? '').split(',').map(Number)
+    expect(ids).toContain(598282638) // Sempiternal (standard edition)
+    expect(ids).toEqual([...FEATURED_ALBUMS.map((album) => album.collectionId), ...FEATURED_TRACK_IDS])
+    expect(FEATURED_TRACK_IDS).toHaveLength(15) // 9 Limp Bizkit + 6 Saliva studio hits
+  })
+
+  it('is skipped when nothing is featured', () => {
+    expect(buildFeaturedLookupUrl([], [])).toBeNull()
+  })
+})
 
 describe('catalog request plan', () => {
-  it('stays well below Apple’s ~20 requests/minute: 3 searches + deep, headliner and spotlight lookups', () => {
+  it('stays well below Apple’s ~20 requests/minute: 3 searches + deep, headliner, spotlight and featured lookups', () => {
     const urls = getCatalogRequestUrls()
-    expect(urls.length).toBeLessThanOrEqual(12)
-    expect(urls.filter((url) => url.includes('/lookup?'))).toHaveLength(9)
+    expect(urls).toHaveLength(13)
+    expect(urls.filter((url) => url.includes('/lookup?'))).toHaveLength(10)
     expect(urls.filter((url) => url.includes('/search?'))).toHaveLength(3)
   })
 
@@ -23,14 +44,15 @@ describe('catalog request plan', () => {
     expect(buildLookupUrls([1, 2])[0]).toContain('entity=song')
   })
 
-  it('fetches the 21 flagship bands deepest (50 songs each → 20–25 studio songs, ≤7 ids per lookup)', () => {
+  it('fetches the 22 flagship bands deepest (50 songs each → 20–25 studio songs, ≤8 ids per lookup)', () => {
     const deepLookups = getCatalogRequestUrls().filter(
       (url) =>
         url.includes('/lookup?') &&
         new URL(url).searchParams.get('limit') === String(LOOKUP_TIERS.deep.songsPerArtist),
     )
     expect(LOOKUP_TIERS.deep.songsPerArtist).toBeGreaterThanOrEqual(40)
-    expect(DEEP_CATALOG_ARTISTS).toHaveLength(21)
+    expect(DEEP_CATALOG_ARTISTS).toHaveLength(22)
+    expect(DEEP_CATALOG_ARTIST_IDS).toContain(105544) // Limp Bizkit
     expect(DEEP_CATALOG_ARTIST_IDS).toHaveLength(DEEP_CATALOG_ARTISTS.length)
     expect(deepLookups).toHaveLength(3)
     const ids = deepLookups.flatMap((url) => (new URL(url).searchParams.get('id') ?? '').split(',').map(Number))

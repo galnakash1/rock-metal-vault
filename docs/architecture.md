@@ -459,10 +459,11 @@ There are no external state libraries — just React state, custom hooks, and pr
 ### Catalog fetch — `useEffect` in `App` + `fetchCatalog()`
 
 - `App` calls `fetchCatalog({ signal, forceRefresh: requestId > 0 })` inside `useEffect`.
-- **Request plan (12 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each) plus three tiers of **Lookup API** calls (Apple applies `limit` per artist), set in `LOOKUP_TIERS` and chosen per band by `getCatalogTier`:
-  - **Deep tier:** `DEEP_CATALOG_ARTIST_IDS`, the 21 flagship bands in `DEEP_CATALOG_ARTISTS` (Meshuggah, Slipknot, Metallica, Nirvana, Rammstein…). Top **50** songs each, chunked at 7 ids, giving 3 lookups (~4 s each). About half of those are live, compilation or duplicate versions, so after filtering and the 25-per-band cap each band keeps 20–25 studio songs.
+- **Request plan (13 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each), one featured lookup, plus three tiers of **Lookup API** calls (Apple applies `limit` per artist), set in `LOOKUP_TIERS` and chosen per band by `getCatalogTier`:
+  - **Deep tier:** `DEEP_CATALOG_ARTIST_IDS`, the 22 flagship bands in `DEEP_CATALOG_ARTISTS` (Meshuggah, Slipknot, Metallica, Nirvana, Rammstein, Limp Bizkit…). Top **50** songs each, chunked at 8 ids, giving 3 lookups (~4–5 s each). About half of those are live, compilation or duplicate versions, so after filtering and the per-band cap each band keeps 20–25 studio songs.
   - **Headliner tier:** `HEADLINER_ARTIST_IDS`, the 17 other bands in `HEADLINER_ARTISTS`. Top 10 songs each, chunked at 12 ids, giving 2 lookups.
   - **Spotlight tier:** `SPOTLIGHT_ARTIST_IDS`, the other 55 curated bands. 5 songs each, chunked at 16 ids, giving 4 lookups.
+  - **Featured lookup** (`buildFeaturedLookupUrl`, 1 request, ~0.5 s): `FEATURED_ALBUMS` collection ids (Bring Me The Horizon's *Sempiternal*, 598282638 → all 11 songs) plus `FEATURED_TRACK_IDS` (the studio versions of 9 Limp Bizkit and 6 Saliva hits). Top-song lookups miss these: newer albums crowd *Sempiternal* out, and Apple ranks the "Greatest Hitz" or soundtrack copies of the hits first.
   Small chunks keep uncached lookups at about 2–5 s (61 ids in one call took 5–12 s). Each request has a 15 s timeout (`AbortSignal.timeout`), and HTTP 429 gets a rate-limit message.
 - **Progressive rendering:** every request merges its tracks into the shared batch the moment it lands (`mergeCatalogTracks` keeps tracks on screen in place and drops duplicate ids), and `onProgress(tracksSoFar)` lets `App` render right away. The catalog appears after the fastest search (~0.8 s cold in a production build), and the rest merge in with a "Loading more bands…" note (full catalog ~1.8 s).
 - `Promise.allSettled`: if some requests fail, the others still produce a catalog (not persisted, so the next load retries). It only throws when nothing came back.
@@ -471,7 +472,7 @@ There are no external state libraries — just React state, custom hooks, and pr
   - de-duplicates by `trackId` (unique React keys) **and by song** (`dedupeSongs`: lead artist + `normalizeTitleKey(title)`). The **earliest release wins** and takes the first copy's place, so the grid doesn't jump. This also covers compilations without a telltale name (Nirvana's self-titled 2002 best-of: "Lithium" now shows *Nevermind*, 1991);
   - keeps at most `MAX_SONGS_PER_ARTIST` = 25 songs per lead artist (`capTracksPerArtist`; Apple lists the most popular first);
   - gives every song of one studio album (lead artist + `normalizeTitleKey(album)`, so deluxe and remastered editions match) the album name and artwork of its earliest release (`canonicalizeAlbumArtwork`).
-- **Caching & sharing:** memory cache → **`localStorage`** (`rmv:catalog:v5`, 6 h TTL, shared by every tab, re-validated via `parseCatalogCache`) → one shared in-flight batch. `App` reads `getCachedCatalog()` synchronously in its `useState` initializers, so a cached load renders the full catalog on the first frame (~60 ms, no loading state, no requests). The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`) and unsubscribes its `onProgress`, so StrictMode's mount → unmount → mount fires the network batch once (a caller joining mid-batch immediately gets the tracks so far). `forceRefresh` (Retry) clears both caches and starts a new batch.
+- **Caching & sharing:** memory cache → **`localStorage`** (`rmv:catalog:v6`, 6 h TTL, shared by every tab, re-validated via `parseCatalogCache`) → one shared in-flight batch. `App` reads `getCachedCatalog()` synchronously in its `useState` initializers, so a cached load renders the full catalog on the first frame (~60 ms, no loading state, no requests). The batch is owned by the module, not the component: each caller's `signal` only stops *that caller* waiting (`abortable`) and unsubscribes its `onProgress`, so StrictMode's mount → unmount → mount fires the network batch once (a caller joining mid-batch immediately gets the tracks so far). `forceRefresh` (Retry) clears both caches and starts a new batch.
 - `App` holds `tracks`, `status: FetchStatus` (initially `'loading'`), and `error: string | null`, and passes them, plus `onRetry`, to Catalog, Detail, and Arena.
 - **Retry:** `handleRetry` sets `status` back to `'loading'` and bumps a `requestId` counter, which is the effect's dependency, so the effect runs again. State is never set synchronously inside the effect body.
 - Uses an `AbortController` in the effect cleanup; results and errors that arrive after an abort are ignored. React StrictMode's double-mount and fast navigation never update state from a stale request.
@@ -635,7 +636,8 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `normalizeArtistKey` | `(name: string) => string` | Case/quote/qualifier/whitespace-insensitive lookup key | ✅ Task 4 |
 | `findArtistMetadata` | `(artist: string) => ArtistMetadata \| null` | Curated lookup (exact, then lead artist of a collaboration) | ✅ Task 4 |
 | `getArtistMetadata` | `(artist: string, itunesGenre: string) => ArtistMetadata` | Curated data or the deterministic `Unknown` + genre-derived fallback | ✅ Task 4 |
-| `DEEP_CATALOG_ARTISTS` / `HEADLINER_ARTISTS` / `getCatalogTier` | `string[]` / `string[]` / `(artist) => 'deep' \| 'headliner' \| 'spotlight'` | The 21 deep-catalog bands, the other headliners, and each band's tier (also used by the stage pools and the builder's depth score) | ✅ upgrade 2 |
+| `FEATURED_ALBUMS` / `FEATURED_TRACK_IDS` / `SONG_CAP_OVERRIDES` / `getSongCap` | `FeaturedAlbum[]` / `number[]` / `Record<string, number>` / `(artist, defaultCap) => number` | Releases fetched explicitly (Sempiternal; Limp Bizkit and Saliva studio hits) and per-band cap overrides | ✅ catalog update |
+| `DEEP_CATALOG_ARTISTS` / `HEADLINER_ARTISTS` / `getCatalogTier` | `string[]` / `string[]` / `(artist) => 'deep' \| 'headliner' \| 'spotlight'` | The 22 deep-catalog bands, the other headliners, and each band's tier (also used by the stage pools and the builder's depth score) | ✅ upgrade 2 |
 | `DEEP_CATALOG_ARTIST_IDS` / `HEADLINER_ARTIST_IDS` / `SPOTLIGHT_ARTIST_IDS` | `number[]` | Apple artist ids per lookup tier (no band in two tiers) | ✅ |
 
 ### `src/utils/riffTabs.ts`
@@ -667,16 +669,17 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 
 | Function / constant | Signature | Behavior | Test |
 | --- | --- | --- | --- |
-| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v5'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
+| `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v6'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
 | `mergeCatalogTracks` / `dedupeSongs` | `(current, incoming) => Track[]` / `(tracks) => Track[]` | Progressive merge (on-screen tracks keep their place) dropping duplicate ids and repeat releases of the same song; the earliest release wins | ✅ |
-| `capTracksPerArtist` / `MAX_SONGS_PER_ARTIST` | `(tracks, max?) => Track[]` / `25` | Keeps the first 25 songs of each lead artist | ✅ upgrade 2 |
+| `capTracksPerArtist` / `MAX_SONGS_PER_ARTIST` | `(tracks, capFor?) => Track[]` / `25` | Per-band cap (25, or `SONG_CAP_OVERRIDES`: Bring Me The Horizon 35); featured tracks are always kept and count toward it | ✅ upgrade 2 + catalog update |
+| `isFeaturedTrack` | `(track) => boolean` | A featured track id or any edition of a featured album; featured copies win `dedupeSongs` and `canonicalizeAlbumArtwork` (the standard edition first) | ✅ catalog update |
 | `canonicalizeAlbumArtwork` | `(tracks) => Track[]` | One album name + cover per studio album: its earliest release | ✅ upgrade 2 |
 | `getStreamingLinks` / `getSearchQuery` (`streamingLinks.ts`) | `(track) => StreamingLink[]` / `(track) => string` | Apple Music / Spotify / YouTube full-song links | ✅ upgrade 2 |
 | `getQueueStep` / `formatQueuePosition` (`audioUtils.ts`) | `(length, index, direction, currentTime?) => number \| 'restart' \| null` / `(label, index, length) => string` | Lineup queue navigation and the "Setlist 2 / 7" label | ✅ |
 | `isStudioRecording` (`trackUtils.ts`) | `(trackName, collectionName?) => boolean` | Studio-only filter (live, commentary, karaoke, interview, unplugged) | ✅ |
 | `getTrackIdFromPath` / `shouldShowMiniPlayer` (`audioUtils.ts`) | `(pathname) => number \| null` / `(loadedId, pathname) => boolean` | Mini-player visibility rule | ✅ |
 | `serializeCatalogCache` / `parseCatalogCache` | `(tracks, now) => string` / `(raw, now, ttl?) => Track[] \| null` | `null` when missing, corrupted, expired, from the future, or empty; tracks are re-validated | ✅ expansion |
-| `buildSearchUrl` / `buildLookupUrls` / `getCatalogRequestUrls` / `LOOKUP_TIERS` | `(term) => string` / `(ids, tier?) => string[]` / `() => string[]` | The request plan: 3 searches + 3 deep, 2 headliner and 4 spotlight lookups (12 requests) | ✅ expansion + upgrade 2 |
+| `buildSearchUrl` / `buildLookupUrls` / `buildFeaturedLookupUrl` / `getCatalogRequestUrls` / `LOOKUP_TIERS` | `(term) => string` / `(ids, tier?) => string[]` / `(albumIds?, trackIds?) => string \| null` / `() => string[]` | The request plan: 3 searches + 3 deep, 2 headliner, 4 spotlight and 1 featured lookup (13 requests) | ✅ expansion + upgrade 2 + catalog update |
 
 ### `src/utils/audioUtils.ts`
 

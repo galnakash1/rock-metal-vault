@@ -57,12 +57,13 @@ Supporting the features above are three **music-data enrichments**, which add da
 https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ```
 
-- The catalog is built from **12 requests on a cold load**:
+- The catalog is built from **13 requests on a cold load**:
   - 3 broad searches (`rock`, `metal`, `metalcore`) for the mainstream;
-  - a **deep tier**: 3 Lookup API calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=50`, 7 artist ids each) for 21 flagship bands (Meshuggah, Slipknot, Bring Me The Horizon, Metallica, Iron Maiden, Bad Omens, Architects, Nirvana, System Of A Down, Avenged Sevenfold, Gojira, Korn, Linkin Park, Opeth, Pantera, Slayer, Megadeth, Black Sabbath, AC/DC, Guns N' Roses, Rammstein). After filtering, each keeps **20–25 studio songs** (capped at 25 per band);
-  - a **headliner tier**: 2 lookups (`limit=10`) for 17 more headliners;
+  - a **deep tier**: 3 Lookup API calls (`https://itunes.apple.com/lookup?id=…&entity=song&limit=50`, up to 8 artist ids each) for 22 flagship bands (Meshuggah, Slipknot, Bring Me The Horizon, Metallica, Iron Maiden, Bad Omens, Architects, Nirvana, System Of A Down, Avenged Sevenfold, Gojira, Korn, Linkin Park, Opeth, Pantera, Slayer, Megadeth, Black Sabbath, AC/DC, Guns N' Roses, Rammstein, Limp Bizkit). After filtering, each keeps **20–25 studio songs** (capped at 25 per band; Bring Me The Horizon at 35);
+  - a **headliner tier**: 2 lookups (`limit=10`) for 18 more headliners (including Saliva);
   - a **spotlight tier**: 4 more lookups (`limit=5`) covering 55 other curated bands, mostly international (Israel, Sweden, Finland, Norway, Denmark, Iceland, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan…).
-  Results are merged and de-duplicated by `trackId` and by song, giving about 980 studio tracks from 19 countries and 30+ styles.
+  - a **featured lookup** (1 call): the full ***Sempiternal*** album (Bring Me The Horizon, 2013, by album id) and the exact studio versions of Limp Bizkit's hits (Break Stuff, Rollin', My Way, Take a Look Around, Nookie, My Generation, Behind Blue Eyes, Boiler, Re-Arranged) and Saliva's (Click Click Boom, Always, Ladies and Gentlemen, Your Disease, Survival of the Sickest, Rest in Pieces). Featured tracks are never dropped by the per-band cap, win de-duplication, and give *Sempiternal* one canonical cover.
+  Results are merged and de-duplicated by `trackId` and by song, giving about 1,030 studio tracks from 19 countries and 30+ styles.
 - **Studio recordings only:** live versions, commentary, karaoke, interview and unplugged releases never enter the catalog.
 - **No compilations:** tracks from Greatest Hits, Best Of, Anthology, Essential, Icon, 20th Century Masters, Retrospective and The Singles collections (and soundtracks) are dropped. When a song appears on several albums, the **original (earliest) release** is kept, and every song from one studio album shows that album's original artwork (e.g. Nirvana's "Lithium" shows *Nevermind*).
 - **Fast loading:** tracks render as soon as the fastest request lands (progressive rendering), and later responses merge in. The finished catalog is cached in memory and in **`localStorage`** for 6 hours, so reloads and new tabs show it instantly with no requests.

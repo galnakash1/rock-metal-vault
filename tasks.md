@@ -216,3 +216,15 @@
   9. **Playlist Builder:** `/builder` with a 5-question Sonic Diagnostic, a Metal Persona, a 10-track playlist (max 2 per band), preview / Play All / Swap / Add All 10 / Re-run, and a navbar link (2×2 on phones).
   10. **Bolder stage:** diamond plate, crimson and amber light beams, a stage truss, lightning, embers, and translucent surfaces.
 - **Done when:** in headless Chrome the first render shows 48 cards and returning to `/` commits in under 16 ms (production build); no compilation albums and one cover per album appear; every deep-tier band has 20–25 tracks; the card play, mini EQ, streaming links, world tour, tournament progression (Stage 1 Cleared → Stage 2 at 22px/×1.5 → Game Over) and builder flow all work; every route has no overflow at 375px and a clean console; and `npm test` (171 tests), `npm run build` and `npm run lint` pass with zero `any`.
+
+---
+
+## Catalog update — Limp Bizkit, Saliva, full *Sempiternal*
+
+- [ ] **Goal:** Add two nu metal bands with their real studio hits, and give Bring Me The Horizon's *Sempiternal* full coverage.
+- **Files:** `src/utils/artistMetadata.ts`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/trackUtils.ts` (+ tests)
+- **Steps:**
+  1. Add Limp Bizkit (US, Nu Metal, Apple id 105544, deep tier) and Saliva (US, Nu Metal, id 391630, headliner tier).
+  2. Add a featured lookup (1 request): the *Sempiternal* album (collection 598282638) and the exact studio track ids of 9 Limp Bizkit and 6 Saliva hits. Featured tracks are pinned past the per-band cap and win de-duplication and album artwork.
+  3. Allow Bring Me The Horizon 35 tracks (`SONG_CAP_OVERRIDES`), treat "Greatest Hitz" as a compilation, and bump the cache key to `rmv:catalog:v6`.
+- **Done when:** in headless Chrome, searching "Limp Bizkit", "Saliva" and "Sempiternal" shows every listed studio track (all 11 *Sempiternal* songs with one cover); and `npm test` (178 tests), `npm run build` and `npm run lint` pass with zero `any`.

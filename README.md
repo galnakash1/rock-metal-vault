@@ -12,7 +12,7 @@ It is a front-end-only single-page app built with **React 19 + TypeScript + Vite
 
 | Route | Page | What you can do |
 | --- | --- | --- |
-| `/` | **Vault Catalog** | Browse ~980 studio tracks as cards (rendered 48 at a time as you scroll, or with **Show More Tracks**). Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort, press ▶ on any card to queue the filtered list from that track, and add tracks to your setlist. |
+| `/` | **Vault Catalog** | Browse ~1,030 studio tracks as cards (rendered 48 at a time as you scroll, or with **Show More Tracks**). Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort, press ▶ on any card to queue the filtered list from that track, and add tracks to your setlist. |
 | `/tracks/:id` | **Track Detail** | 600×600 artwork and track facts, full-song links (Apple Music, Spotify, YouTube), the **Amp Console** (preview player with live EQ and visualizer), and the **6-String Guitar Riff Tab** with a playhead that follows the music. |
 | `/setlist` | **Festival Lineup & Poster Builder** | Your saved tracks become a festival poster (Headliners, Main Stage and World Tour dates) in one of 6 themes. Play the whole lineup in running order (⏮ / ⏭, auto-advance), or any single row, and open full songs on Apple Music, Spotify or YouTube. |
 | `/arena` | **Riff Arena** | The **Riff Blind-Test Tournament** (4 stages of 5 rounds, 3 amp-tube lives, final scoreboard) and the **Head-to-Head Track Battle**. |
@@ -99,7 +99,7 @@ npm test
 npm run test:ui
 ```
 
-There are **171 unit tests in 7 files**. They cover the app's pure logic and never touch the network:
+There are **178 unit tests in 7 files**. They cover the app's pure logic and never touch the network:
 
 | Test file | Covers |
 | --- | --- |
@@ -120,8 +120,9 @@ The tests use `src/data/mockTracks.json` as a fixture: 10 real iTunes records, l
 | Endpoint | Used for |
 | --- | --- |
 | `https://itunes.apple.com/search?term=…&media=music&entity=song&limit=50` | Three broad searches (`rock`, `metal`, `metalcore`) for the mainstream catalog |
-| `https://itunes.apple.com/lookup?id=…&entity=song&limit=50` | **Deep tier:** the top 50 songs of 21 flagship bands (Metallica, Meshuggah, Slipknot, Bring Me The Horizon, Nirvana…), by Apple artist id (3 lookups of 7 ids). After filtering, each band keeps 20–25 studio songs. |
-| `https://itunes.apple.com/lookup?id=…&entity=song&limit=10` | **Headliner tier:** the top 10 songs of 17 more headliners (2 lookups) |
+| `https://itunes.apple.com/lookup?id=…&entity=song&limit=50` | **Deep tier:** the top 50 songs of 22 flagship bands (Metallica, Meshuggah, Slipknot, Bring Me The Horizon, Nirvana, Limp Bizkit…), by Apple artist id (3 lookups of up to 8 ids). After filtering, each band keeps 20–25 studio songs (Bring Me The Horizon: up to 35). |
+| `https://itunes.apple.com/lookup?id=…&entity=song&limit=10` | **Headliner tier:** the top 10 songs of 18 more headliners, including Saliva (2 lookups) |
+| `https://itunes.apple.com/lookup?id=598282638,1440754477,…&entity=song&limit=200` | **Featured releases:** one lookup for what top-song lookups miss — every track of Bring Me The Horizon's *Sempiternal* (by album id) and the exact studio versions of Limp Bizkit's and Saliva's hits (by track id). These tracks are pinned: the per-band cap never drops them, and they win de-duplication. |
 | `https://itunes.apple.com/lookup?id=…&entity=song&limit=5` | **Spotlight tier:** 5 songs from each of 55 other curated bands, mostly the international scene (Israel, Scandinavia, Japan…) (4 lookups of ~16 ids) |
 
 Preview audio and artwork are served with `Access-Control-Allow-Origin: *`, which lets the Web Audio API analyse and EQ the previews.
@@ -129,15 +130,15 @@ Preview audio and artwork are served with `Access-Control-Allow-Origin: *`, whic
 ### Loading pipeline
 
 1. **Instant from cache.** The normalized catalog is cached in memory and in **`localStorage`** for 6 hours, and shared by every tab. A cached load renders the full catalog on the first frame, with no network requests.
-2. **Progressive network load.** On a cold start, the 12 requests run in parallel. Tracks appear as soon as the fastest search returns; the rest merge in under a "Loading more bands…" note. If one request fails, the others still load.
+2. **Progressive network load.** On a cold start, the 13 requests run in parallel. Tracks appear as soon as the fastest search returns; the rest merge in under a "Loading more bands…" note. If one request fails, the others still load.
 3. **Validate → normalize → enrich → de-duplicate → filter.** Responses are checked at runtime (`parseSearchResults`), mapped to the app's `Track` model, and enriched.
    - **Studio recordings only:** live versions ("(Live)", "- Live", "Live at Wembley"…), commentary, karaoke, interview and unplugged releases are rejected by `isStudioRecording`.
-   - **No compilations:** Greatest Hits, Best Of, Anthology, Essential, Icon, 20th Century Masters, Retrospective, The Singles (and soundtracks) are rejected by `isCompilationAlbum`.
+   - **No compilations:** Greatest Hits (and Limp Bizkit's "Greatest Hitz"), Best Of, Anthology, Essential, Icon, 20th Century Masters, Retrospective, The Singles (and soundtracks) are rejected by `isCompilationAlbum`.
    - **One copy per song:** duplicate `trackId`s are dropped (unique React keys), and so are repeat releases of the same song on another album. The **original (earliest) release wins** (`dedupeSongs`), so Nirvana's "Lithium" shows *Nevermind*, not the 2002 self-titled best-of.
    - **One cover per album:** every song from the same studio album (deluxe and remastered editions included) gets the artwork of its earliest release (`canonicalizeAlbumArtwork`).
-   - **At most 25 songs per band** (`capTracksPerArtist`).
+   - **At most 25 songs per band** (`capTracksPerArtist`; Bring Me The Horizon gets 35, so all of *Sempiternal* fits next to their other hits).
    - **Off-genre filter:** hits like "Jingle Bell Rock" are removed.
-4. **Rate-limit friendly.** Apple allows roughly 20 requests per minute, and a cold load makes 12. React StrictMode's double mount shares one in-flight batch, cached loads make no requests, and **Retry** forces a fresh fetch.
+4. **Rate-limit friendly.** Apple allows roughly 20 requests per minute, and a cold load makes 13. React StrictMode's double mount shares one in-flight batch, cached loads make no requests, and **Retry** forces a fresh fetch.
 
 ### Enrichment
 
@@ -152,7 +153,7 @@ Matching uses Apple's artist id first, then the name with accents and case ignor
 
 | Key | Contents |
 | --- | --- |
-| `rmv:catalog:v5` | Cached catalog (6 h TTL; the version is bumped whenever the catalog rules change) |
+| `rmv:catalog:v6` | Cached catalog (6 h TTL; the version is bumped whenever the catalog rules change) |
 | `rmv:setlist` | Your festival setlist (full tracks, re-validated on load) |
 | `rmv:arena:high-score`, `rmv:arena:best-streak` | All-time Riff Blind-Test records |
 

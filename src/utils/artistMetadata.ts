@@ -95,8 +95,10 @@ export const ARTIST_ENTRIES: ReadonlyArray<
   ['Sleep Token', 'United Kingdom', 'Alternative Metal'],
   ['System Of A Down', 'United States', 'Alternative Metal', 462715],
   ['Korn', 'United States', 'Nu Metal', 466532],
+  ['Limp Bizkit', 'United States', 'Nu Metal', 105544],
   ['Linkin Park', 'United States', 'Nu Metal', 148662],
   ['Papa Roach', 'United States', 'Nu Metal'],
+  ['Saliva', 'United States', 'Nu Metal', 391630],
   ['Slipknot', 'United States', 'Nu Metal', 6907568],
   ['Rage Against the Machine', 'United States', 'Rap Metal'],
   ['Rob Zombie', 'United States', 'Industrial Metal'],
@@ -267,6 +269,7 @@ export const HEADLINER_ARTISTS: readonly string[] = [
   'Bring Me The Horizon', 'Architects', 'Parkway Drive', 'Spiritbox', 'Trivium',
   'Killswitch Engage', 'Lamb of God', 'Bullet For My Valentine', 'AC/DC', "Guns N' Roses",
   'Led Zeppelin', 'Deep Purple', 'Nirvana', 'Alice In Chains', 'Soundgarden', 'Foo Fighters',
+  'Limp Bizkit', 'Saliva',
 ]
 
 /** The flagship bands fetched deepest of all: up to 25 studio tracks each. */
@@ -274,7 +277,63 @@ export const DEEP_CATALOG_ARTISTS: readonly string[] = [
   'Meshuggah', 'Slipknot', 'Bring Me The Horizon', 'Metallica', 'Iron Maiden', 'Bad Omens',
   'Architects', 'Nirvana', 'System Of A Down', 'Avenged Sevenfold', 'Gojira', 'Korn',
   'Linkin Park', 'Opeth', 'Pantera', 'Slayer', 'Megadeth', 'Black Sabbath', 'AC/DC',
-  "Guns N' Roses", 'Rammstein',
+  "Guns N' Roses", 'Rammstein', 'Limp Bizkit',
+]
+
+/** Bands allowed more than the default 25 studio tracks (so a landmark album fits next to the hits). */
+export const SONG_CAP_OVERRIDES: Readonly<Record<string, number>> = {
+  'Bring Me The Horizon': 35,
+}
+
+const SONG_CAP_BY_KEY: ReadonlyMap<string, number> = new Map(
+  Object.entries(SONG_CAP_OVERRIDES).map(([name, cap]) => [normalizeArtistKey(name), cap]),
+)
+
+/** The per-band track cap: an override, or `defaultCap`. Collaborations count for the lead artist. */
+export function getSongCap(artistName: string, defaultCap: number): number {
+  return SONG_CAP_BY_KEY.get(getLeadArtistKey(artistName)) ?? defaultCap
+}
+
+/**
+ * Releases fetched explicitly in one extra lookup, because "top songs" lookups don't reliably
+ * return them (newer albums crowd them out, or Apple ranks a compilation copy first). Their tracks
+ * are pinned: the per-band cap never drops them, and they win de-duplication.
+ */
+export interface FeaturedAlbum {
+  artist: string
+  album: string // studio album title (editions like "(Deluxe)" match too)
+  collectionId: number // Apple collection id of the standard edition
+}
+
+export const FEATURED_ALBUMS: readonly FeaturedAlbum[] = [
+  // Bring Me The Horizon's landmark 2013 album, all 11 tracks.
+  { artist: 'Bring Me The Horizon', album: 'Sempiternal', collectionId: 598282638 },
+]
+
+/** Apple track ids of studio originals (never the "Greatest Hitz" or soundtrack copies). */
+export const FEATURED_TRACK_IDS: readonly number[] = [
+  // Limp Bizkit — Significant Other (1999)
+  1440754476, // Nookie
+  1440754477, // Break Stuff
+  1440754478, // Re-Arranged
+  // Limp Bizkit — Chocolate Starfish and the Hot Dog Flavored Water (2000)
+  1440843257, // Rollin' (Air Raid Vehicle)
+  1440843064, // My Way
+  1440843451, // Take A Look Around
+  1440843049, // My Generation
+  1440843513, // Boiler
+  // Limp Bizkit — Results May Vary (2003)
+  1440874577, // Behind Blue Eyes
+  // Saliva — Every Six Seconds (2001)
+  1423175286, // Click Click Boom
+  1423175711, // Your Disease
+  // Saliva — Back into Your System (2002)
+  1422924591, // Always
+  1422925014, // Rest in Pieces
+  // Saliva — Survival of the Sickest (2004)
+  1444113517, // Survival of the Sickest
+  // Saliva — Blood Stained Love Story (2007)
+  1443881605, // Ladies and Gentlemen
 ]
 
 /** How deep the catalog fetches a curated band (each band is in exactly one tier). */

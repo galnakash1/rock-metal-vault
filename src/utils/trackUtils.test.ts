@@ -307,7 +307,9 @@ describe('isCompilationAlbum (studio albums only)', () => {
   it('flags hits collections, anthologies and soundtracks', () => {
     const compilations = [
       'Greatest Hits',
+      'Greatest Hitz', // Limp Bizkit
       "Guns N' Roses: Greatest Hits",
+      'Moving Forward In Reverse: Greatest Hits', // Saliva
       'The Best of Iron Maiden',
       'Best Of - Black Sabbath',
       'Anthology',
@@ -348,8 +350,8 @@ describe('isCompilationAlbum (studio albums only)', () => {
 })
 
 describe('catalog tiers', () => {
-  it('fetches the 21 flagship bands deepest, by Apple artist id', () => {
-    expect(DEEP_CATALOG_ARTISTS).toHaveLength(21)
+  it('fetches the 22 flagship bands deepest, by Apple artist id', () => {
+    expect(DEEP_CATALOG_ARTISTS).toHaveLength(22)
     expect(DEEP_CATALOG_ARTIST_IDS).toHaveLength(DEEP_CATALOG_ARTISTS.length)
     for (const name of DEEP_CATALOG_ARTISTS) {
       expect(findArtistMetadata(name)).not.toBeNull()
@@ -358,6 +360,21 @@ describe('catalog tiers', () => {
     expect(DEEP_CATALOG_ARTIST_IDS).toContain(3996865) // Metallica
     expect(DEEP_CATALOG_ARTIST_IDS).toContain(112018) // Nirvana (Seattle, not a namesake)
     expect(DEEP_CATALOG_ARTIST_IDS).toContain(17304969) // Meshuggah
+    expect(DEEP_CATALOG_ARTIST_IDS).toContain(105544) // Limp Bizkit
+  })
+
+  it('adds Limp Bizkit (deep) and Saliva (headliner) as US nu metal, rejecting namesakes', () => {
+    expect(findArtistMetadata('Limp Bizkit', 105544)).toMatchObject({
+      originCountry: 'United States',
+      subgenre: 'Nu Metal',
+    })
+    expect(COUNTRY_FLAGS['United States']).toBe('🇺🇸')
+    expect(findArtistMetadata('Saliva', 391630)).toMatchObject({ originCountry: 'United States', subgenre: 'Nu Metal' })
+    expect(getCatalogTier('Limp Bizkit')).toBe('deep')
+    expect(getCatalogTier('Saliva')).toBe('headliner')
+    expect(HEADLINER_ARTIST_IDS).toContain(391630)
+    // A hip-hop artist also called "Saliva" doesn't become the Memphis band.
+    expect(findArtistMetadata('Saliva', 1473196115, 'Hip-Hop/Rap')).toBeNull()
   })
 
   it('keeps the other headliners in the 10-song tier and everyone else in the spotlight', () => {

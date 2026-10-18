@@ -116,7 +116,7 @@ const NON_STUDIO_PATTERNS: readonly RegExp[] = [
  * different cover than the original studio album, so they're kept out of the catalog.
  */
 const COMPILATION_PATTERN =
-  /\b(?:greatest hits|best of|anthology|essential|icon|20th century masters|retrospective|the singles|b-sides|soundtrack|motion picture)\b/i
+  /\b(?:greatest hit[sz]|best of|anthology|essential|icon|20th century masters|retrospective|the singles|b-sides|soundtrack|motion picture)\b/i
 
 /** True when an album name marks a compilation (e.g. "Greatest Hits, Vol. 1", "The Essential Korn"). */
 export function isCompilationAlbum(collectionName = ''): boolean {

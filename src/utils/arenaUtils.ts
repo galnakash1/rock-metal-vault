@@ -1,4 +1,13 @@
-import type { BlindTestRound, BlindTestScore, ComparisonRow, ComparisonWinner, Track } from '../types/track'
+import type {
+  ArenaRecords,
+  BlindTestRound,
+  BlindTestSetSummary,
+  ComparisonRow,
+  ComparisonWinner,
+  RankTitle,
+  RoundResult,
+  Track,
+} from '../types/track'
 import { getLeadArtistKey } from './artistMetadata'
 import { getTrackRiffTab, normalizeTitleKey } from './riffTabs'
 import { formatDuration } from './trackUtils'
@@ -118,56 +127,109 @@ export function getGuessPoints(
   return BASE_POINTS + Math.round(SPEED_BONUS_POINTS * remaining)
 }
 
-export const INITIAL_BLIND_TEST_SCORE: BlindTestScore = {
-  score: 0,
-  played: 0,
-  correct: 0,
-  streak: 0,
-  bestStreak: 0,
+// ---------- Set rules: 5 rounds, 3 lives ----------
+
+export const ROUNDS_PER_SET = 5
+export const LIVES_PER_SET = 3
+export const MAX_SET_SCORE = ROUNDS_PER_SET * (BASE_POINTS + SPEED_BONUS_POINTS) // 5,000
+
+/**
+ * Where a set stands after `roundsPlayed` rounds with `livesLeft` lives. Losing the last life
+ * ends the set even on round 5 ('game-over' wins); otherwise 5 rounds played is a 'victory'.
+ */
+export function getSetStatus(roundsPlayed: number, livesLeft: number): BlindTestSetSummary['status'] {
+  if (livesLeft <= 0) return 'game-over'
+  if (roundsPlayed >= ROUNDS_PER_SET) return 'victory'
+  return 'playing'
 }
 
-/** Next score after a guess: a miss resets the streak; the best streak only ever grows. */
-export function applyGuess(
-  current: BlindTestScore,
-  isCorrect: boolean,
-  points: number,
-): BlindTestScore {
-  const streak = isCorrect ? current.streak + 1 : 0
+/** Everything the scoreboard shows, derived from the round results so far (never stored). */
+export function summarizeSet(results: readonly RoundResult[]): BlindTestSetSummary {
+  let correct = 0
+  let currentStreak = 0
+  let bestStreak = 0
+  let score = 0
+  for (const result of results) {
+    score += result.points
+    if (result.outcome === 'correct') {
+      correct += 1
+      currentStreak += 1
+      bestStreak = Math.max(bestStreak, currentStreak)
+    } else {
+      currentStreak = 0
+    }
+  }
+  const livesLeft = Math.max(0, LIVES_PER_SET - (results.length - correct))
   return {
-    score: current.score + (isCorrect ? points : 0),
-    played: current.played + 1,
-    correct: current.correct + (isCorrect ? 1 : 0),
-    streak,
-    bestStreak: Math.max(current.bestStreak, streak),
+    score,
+    played: results.length,
+    correct,
+    livesLeft,
+    currentStreak,
+    bestStreak,
+    status: getSetStatus(results.length, livesLeft),
   }
 }
 
-// ---------- Best streak persistence ----------
+// ---------- Rank ----------
 
+const RANKS: ReadonlyArray<readonly [minScore: number, title: RankTitle]> = [
+  [4000, 'Immortal Riff God'],
+  [2500, 'Main Stage Shredder'],
+  [1000, 'Mosh Pit Regular'],
+  [0, 'Garage Roadie'],
+]
+
+/** Rank earned by a final set score: <1000, 1000–2499, 2500–3999, ≥4000. */
+export function getRankTitle(score: number): RankTitle {
+  for (const [minScore, title] of RANKS) {
+    if (score >= minScore) return title
+  }
+  return 'Garage Roadie'
+}
+
+// ---------- All-time records (localStorage) ----------
+
+export const HIGH_SCORE_STORAGE_KEY = 'rmv:arena:high-score'
 export const BEST_STREAK_STORAGE_KEY = 'rmv:arena:best-streak'
 
-/** Parses a stored best streak; anything but a non-negative integer becomes 0. */
-export function parseBestStreak(raw: string | null): number {
+/** Parses a stored count; anything but a non-negative integer becomes 0. */
+export function parseStoredCount(raw: string | null): number {
   if (raw === null || !/^\d+$/.test(raw.trim())) return 0
   const value = Number(raw.trim())
   return Number.isSafeInteger(value) ? value : 0
 }
 
-export function loadBestStreak(storage: Pick<Storage, 'getItem'> | null): number {
-  try {
-    return parseBestStreak(storage?.getItem(BEST_STREAK_STORAGE_KEY) ?? null)
-  } catch {
-    return 0
+export function loadArenaRecords(storage: Pick<Storage, 'getItem'> | null): ArenaRecords {
+  const read = (key: string): number => {
+    try {
+      return parseStoredCount(storage?.getItem(key) ?? null)
+    } catch {
+      return 0
+    }
   }
+  return { highScore: read(HIGH_SCORE_STORAGE_KEY), bestStreak: read(BEST_STREAK_STORAGE_KEY) }
 }
 
-export function saveBestStreak(storage: Pick<Storage, 'setItem'> | null, bestStreak: number): boolean {
+export function saveArenaRecords(
+  storage: Pick<Storage, 'setItem'> | null,
+  records: ArenaRecords,
+): boolean {
   if (!storage) return false
   try {
-    storage.setItem(BEST_STREAK_STORAGE_KEY, String(Math.max(0, Math.floor(bestStreak))))
+    storage.setItem(HIGH_SCORE_STORAGE_KEY, String(Math.max(0, Math.floor(records.highScore))))
+    storage.setItem(BEST_STREAK_STORAGE_KEY, String(Math.max(0, Math.floor(records.bestStreak))))
     return true
   } catch {
     return false
+  }
+}
+
+/** Records after a finished set: each one only ever goes up. */
+export function mergeArenaRecords(records: ArenaRecords, set: BlindTestSetSummary): ArenaRecords {
+  return {
+    highScore: Math.max(records.highScore, set.score),
+    bestStreak: Math.max(records.bestStreak, set.bestStreak),
   }
 }
 

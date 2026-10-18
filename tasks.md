@@ -145,6 +145,18 @@
 
 ---
 
+## Blind-Test set loop (between Tasks 7 and 8) — 5 rounds, 3 lives, Final Scoreboard
+
+- [ ] **Goal:** Give the Riff Blind-Test a clear ending instead of endless rounds.
+- **Files:** `src/types/track.ts`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts` (`onTrackEnded`), `src/components/BlindTestGame.tsx`, `src/pages/ArenaPage.tsx`, `src/App.css`, `src/index.css`, `src/utils/trackUtils.test.ts`
+- **Steps:**
+  1. Replace the endless score model with `RoundResult[]` plus pure helpers: `summarizeSet`, `getSetStatus` (game-over evaluation), `getRankTitle`, and the all-time records helpers (`load` / `save` / `mergeArenaRecords`), with unit tests.
+  2. Make timeouts count: the player engine emits `onTrackEnded`, and an unanswered round whose concealed preview ends costs a life.
+  3. Show "Round X of 5" and the amp-tube lives; on the set's final result show "See Final Results", which stops the audio and opens the Final Scoreboard (banner, rank, score out of 5,000, accuracy, best streak, all-time records, recap with setlist buttons, and "Play New Set").
+- **Done when:** a 5-round set ends in "Set Complete!" and losing 3 lives ends in "Game Over — Amp Blown!" (both checked in headless Chrome, including a real timeout); records persist; and `npm test`, `npm run build`, and `npm run lint` pass.
+
+---
+
 ## Task 8 — Dark Rock/Metal theme and responsive design
 
 - [ ] **Goal:** Make it look like a metal album cover, on every screen size.

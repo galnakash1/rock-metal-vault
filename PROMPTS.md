@@ -293,3 +293,31 @@ Verified the 3 UX fixes in the browser: initial load time dropped to ~60ms via l
 > Stop after completing Task 7 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Tested the Arena page (/arena) in the browser: played the Riff Blind-Test game (verified progressive unblur, concealed mini-player, scoring, and streak persistence) and compared tracks side-by-side in Head-to-Head battle. Marked Task 7 as done in tasks.md.
+**17:51 · claude**
+
+> <pasted_content id="5dbb">
+> After playing the Riff Blind-Test game on `/arena`, I noticed the game continues endlessly without an ending. Before we start Task 8, let's give the Riff Blind-Test a structured game loop with a clear ending and summary screen:
+> 
+> 1. **5-Round Set + 3 Lives (Amp Tubes) Game Loop:**
+>    - A game run consists of **5 rounds** (`Round X of 5`) and **3 lives** (e.g., 3 Amp Tubes / Lives displayed in the game header).
+>    - Each wrong guess (or timeout if the 30s preview ends without a guess) costs 1 life.
+>    - The game ends when EITHER:
+>      a) **Set Complete (Victory):** The player completes all 5 rounds with at least 1 life remaining.
+>      b) **Game Over (Blown Amp):** The player loses all 3 lives before finishing the 5 rounds.
+>    - On the last round (or when the 3rd life is lost), the button should read **"See Final Results"** instead of "Next Riff".
+> 
+> 2. **Final Scoreboard / Game Over Summary View:**
+>    - When the game ends, stop any concealed audio and display a dedicated **Final Scoreboard** screen inside the Riff Blind-Test section showing:
+>      - Outcome banner (**"Set Complete!"** vs. **"Game Over — Amp Blown!"**).
+>      - **Final Set Score** (out of 5,000 max), **Accuracy** (e.g. `4 / 5 correct`), **Best Streak in Set**, and persistent all-time **High Score** + **Best Streak** (saved in `localStorage`).
+>      - **Earned Rank Title** calculated from final score via a pure helper in `arenaUtils.ts` (e.g., `< 1000`: `"Garage Roadie"`, `1000–2499`: `"Mosh Pit Regular"`, `2500–3999`: `"Main Stage Shredder"`, `>= 4000`: `"Immortal Riff God"`).
+>      - **Round-by-Round Recap List:** List the tracks played during this run showing ✅/❌ result, points earned, a link to `/tracks/${track.id}`, and a `SetlistButton` so players can easily add songs they discovered during the game to their Festival Setlist.
+>      - A **"Play New Set"** button that resets the 5 rounds and 3 lives and starts Round 1.
+> 
+> 3. **Tests & Verification:**
+>    - Add pure helper functions in `src/utils/arenaUtils.ts` (for rank calculation and game-over state evaluation) and unit-test them in `src/utils/trackUtils.test.ts`.
+>    - Verify in headless Chrome both ending paths (winning a 5-round set and losing 3 lives), and confirm `npm test`, `npm run build`, and `npm run lint` pass with zero errors and zero `any`.
+> 
+> Stop when done and explain what changed in 3 sentences.
+> </pasted_content id="5dbb">
+Tested the 5-round + 3 amp-tube lives game loop in /arena: verified both "Set Complete!" victory and "Game Over — Amp Blown!" paths, rank titles, round-by-round recap with Setlist buttons, and High Score persistence. Marked Blind-Test set loop as done in tasks.md.

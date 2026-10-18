@@ -1,19 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import mockData from '../data/mockTracks.json'
 import {
-  INITIAL_BLIND_TEST_SCORE,
-  applyGuess,
+  LIVES_PER_SET,
+  MAX_SET_SCORE,
+  ROUNDS_PER_SET,
   buildBlindTestRound,
   compareTracks,
   getArtworkBlur,
   getGuessPoints,
-  loadBestStreak,
-  parseBestStreak,
+  getRankTitle,
+  getSetStatus,
+  loadArenaRecords,
+  mergeArenaRecords,
+  parseStoredCount,
   pickRandomTrack,
-  saveBestStreak,
+  saveArenaRecords,
   shuffle,
+  summarizeSet,
 } from './arenaUtils'
-import type { ITunesTrackRaw, Subgenre, Track, TrackFilters } from '../types/track'
+import type { ITunesTrackRaw, RoundOutcome, RoundResult, Subgenre, Track, TrackFilters } from '../types/track'
 import { ARTIST_ENTRIES, COUNTRY_FLAGS, SPOTLIGHT_ARTIST_IDS, getArtistMetadata, normalizeArtistKey } from './artistMetadata'
 import {
   GUITAR_STRINGS,
@@ -783,7 +788,7 @@ describe('getArtworkBlur (progressive reveal)', () => {
   })
 })
 
-describe('getGuessPoints & applyGuess (scoring)', () => {
+describe('getGuessPoints (speed scoring)', () => {
   it('rewards faster correct guesses: 1000 instantly down to 100 at the end, 0 when wrong', () => {
     expect(getGuessPoints(true, 0)).toBe(1000)
     expect(getGuessPoints(true, 15)).toBe(550)
@@ -793,22 +798,99 @@ describe('getGuessPoints & applyGuess (scoring)', () => {
     expect(getGuessPoints(true, 5)).toBeGreaterThan(getGuessPoints(true, 6))
   })
 
-  it('builds a streak, resets it on a miss, and keeps the best streak', () => {
-    let score = { ...INITIAL_BLIND_TEST_SCORE, bestStreak: 1 }
-    score = applyGuess(score, true, 900)
-    score = applyGuess(score, true, 700)
-    expect(score).toEqual({ score: 1600, played: 2, correct: 2, streak: 2, bestStreak: 2 })
-    score = applyGuess(score, false, 0)
-    expect(score).toEqual({ score: 1600, played: 3, correct: 2, streak: 0, bestStreak: 2 })
-    expect(INITIAL_BLIND_TEST_SCORE.played).toBe(0) // never mutated
+  it('caps a perfect 5-round set at 5,000 points', () => {
+    expect(MAX_SET_SCORE).toBe(5000)
+    expect(ROUNDS_PER_SET * getGuessPoints(true, 0)).toBe(MAX_SET_SCORE)
   })
 })
 
-describe('best streak persistence', () => {
+/** Round results from outcomes; correct rounds score `points` each. */
+const roundResults = (outcomes: RoundOutcome[], points = 800): RoundResult[] =>
+  outcomes.map((outcome, index) => ({
+    track: tracks[index % tracks.length] ?? makeTrack(),
+    outcome,
+    points: outcome === 'correct' ? points : 0,
+  }))
+
+describe('getSetStatus (game-over evaluation)', () => {
+  it('keeps playing until 5 rounds or the 3rd lost life', () => {
+    expect(LIVES_PER_SET).toBe(3)
+    expect(getSetStatus(0, 3)).toBe('playing')
+    expect(getSetStatus(4, 1)).toBe('playing')
+    expect(getSetStatus(5, 1)).toBe('victory')
+    expect(getSetStatus(5, 3)).toBe('victory')
+    expect(getSetStatus(3, 0)).toBe('game-over')
+  })
+
+  it('treats losing the last life on round 5 as game over, not victory', () => {
+    expect(getSetStatus(5, 0)).toBe('game-over')
+  })
+})
+
+describe('summarizeSet', () => {
+  it('starts a fresh set with 3 lives and nothing scored', () => {
+    expect(summarizeSet([])).toEqual({
+      score: 0,
+      played: 0,
+      correct: 0,
+      livesLeft: 3,
+      currentStreak: 0,
+      bestStreak: 0,
+      status: 'playing',
+    })
+  })
+
+  it('ends in victory after 5 rounds with a life left, tracking accuracy and streaks', () => {
+    const set = summarizeSet(roundResults(['correct', 'correct', 'wrong', 'correct', 'correct']))
+    expect(set).toEqual({
+      score: 3200,
+      played: 5,
+      correct: 4,
+      livesLeft: 2,
+      currentStreak: 2,
+      bestStreak: 2,
+      status: 'victory',
+    })
+  })
+
+  it('counts wrong guesses and timeouts as lost lives, ending early on the 3rd', () => {
+    const set = summarizeSet(roundResults(['wrong', 'correct', 'timeout', 'wrong']))
+    expect(set).toMatchObject({ played: 4, correct: 1, livesLeft: 0, currentStreak: 0, status: 'game-over' })
+  })
+
+  it('finds the longest streak inside the set', () => {
+    const set = summarizeSet(roundResults(['correct', 'correct', 'correct', 'wrong', 'correct']))
+    expect(set.bestStreak).toBe(3)
+    expect(set.currentStreak).toBe(1)
+  })
+})
+
+describe('getRankTitle', () => {
+  it('maps the final set score to a rank at the documented thresholds', () => {
+    expect(getRankTitle(0)).toBe('Garage Roadie')
+    expect(getRankTitle(999)).toBe('Garage Roadie')
+    expect(getRankTitle(1000)).toBe('Mosh Pit Regular')
+    expect(getRankTitle(2499)).toBe('Mosh Pit Regular')
+    expect(getRankTitle(2500)).toBe('Main Stage Shredder')
+    expect(getRankTitle(3999)).toBe('Main Stage Shredder')
+    expect(getRankTitle(4000)).toBe('Immortal Riff God')
+    expect(getRankTitle(5000)).toBe('Immortal Riff God')
+  })
+})
+
+describe('all-time arena records', () => {
   it('parses only non-negative integers', () => {
-    expect(parseBestStreak('7')).toBe(7)
-    expect(parseBestStreak(' 12 ')).toBe(12)
-    for (const raw of [null, '', '-3', '2.5', 'abc', '1e3']) expect(parseBestStreak(raw)).toBe(0)
+    expect(parseStoredCount('7')).toBe(7)
+    expect(parseStoredCount(' 4200 ')).toBe(4200)
+    for (const raw of [null, '', '-3', '2.5', 'abc', '1e3']) expect(parseStoredCount(raw)).toBe(0)
+  })
+
+  it('only ever raises the high score and best streak', () => {
+    const records = { highScore: 3000, bestStreak: 4 }
+    const set = summarizeSet(roundResults(['correct', 'correct', 'correct', 'correct', 'correct'], 900))
+    expect(mergeArenaRecords(records, set)).toEqual({ highScore: 4500, bestStreak: 5 })
+    const weakSet = summarizeSet(roundResults(['wrong', 'wrong', 'wrong']))
+    expect(mergeArenaRecords(records, weakSet)).toEqual(records)
   })
 
   it('round-trips through storage and survives blocked storage', () => {
@@ -817,8 +899,9 @@ describe('best streak persistence', () => {
       getItem: (key: string) => data.get(key) ?? null,
       setItem: (key: string, value: string) => void data.set(key, value),
     }
-    expect(saveBestStreak(storage, 5)).toBe(true)
-    expect(loadBestStreak(storage)).toBe(5)
+    expect(saveArenaRecords(storage, { highScore: 4100, bestStreak: 5 })).toBe(true)
+    expect(loadArenaRecords(storage)).toEqual({ highScore: 4100, bestStreak: 5 })
+
     const blocked = {
       getItem: (): string | null => {
         throw new Error('blocked')
@@ -827,9 +910,9 @@ describe('best streak persistence', () => {
         throw new Error('blocked')
       },
     }
-    expect(loadBestStreak(blocked)).toBe(0)
-    expect(saveBestStreak(blocked, 5)).toBe(false)
-    expect(loadBestStreak(null)).toBe(0)
+    expect(loadArenaRecords(blocked)).toEqual({ highScore: 0, bestStreak: 0 })
+    expect(saveArenaRecords(blocked, { highScore: 1, bestStreak: 1 })).toBe(false)
+    expect(loadArenaRecords(null)).toEqual({ highScore: 0, bestStreak: 0 })
   })
 })
 

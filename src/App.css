@@ -1218,6 +1218,197 @@
   color: #fff;
 }
 
+/* Lives: glowing amp tubes (dark when blown) */
+.amp-tubes {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 1.6rem;
+}
+
+.amp-tube {
+  width: 12px;
+  height: 24px;
+  border: 1px solid #4a4a52;
+  border-radius: 6px 6px 3px 3px;
+  background: #1b1b1f;
+}
+
+.amp-tube--lit {
+  border-color: #f5a524;
+  background: radial-gradient(circle at 50% 60%, #ffd58a 0 25%, #f5a524 45%, #7a3d06 100%);
+  box-shadow: 0 0 10px rgb(245 165 36 / 70%);
+}
+
+.arena-records {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.arena-records strong {
+  color: #fff;
+}
+
+/* Final scoreboard */
+.set-summary {
+  display: grid;
+  gap: 20px;
+}
+
+.set-banner {
+  display: grid;
+  gap: 4px;
+  padding: 20px 24px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.set-banner--victory {
+  border: 1px solid #2f9e5b;
+  background: linear-gradient(180deg, rgb(47 158 91 / 25%), rgb(47 158 91 / 6%));
+}
+
+.set-banner--game-over {
+  border: 1px solid #e0352b;
+  background: linear-gradient(180deg, rgb(224 53 43 / 28%), rgb(224 53 43 / 6%));
+}
+
+.set-banner-title {
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: clamp(1.75rem, 5vw, 2.5rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.set-banner-title:focus {
+  outline: none;
+}
+
+.set-rank strong {
+  color: var(--amber);
+}
+
+.set-stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.set-stats div {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.set-stats dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.set-stats dd {
+  margin: 4px 0 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.recap-title {
+  font-size: 1.125rem;
+  color: #fff;
+}
+
+.recap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.recap-item {
+  display: grid;
+  grid-template-columns: auto auto 48px minmax(0, 1fr) 4.5rem 11.5rem;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.recap-outcome {
+  font-size: 1.125rem;
+}
+
+.recap-round {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.recap-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+}
+
+.recap-track {
+  display: grid;
+  min-width: 0;
+}
+
+.recap-title-link {
+  overflow: hidden;
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recap-title-link:hover {
+  text-decoration: underline;
+}
+
+.recap-artist {
+  overflow: hidden;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recap-points {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--amber);
+}
+
+@media (max-width: 640px) {
+  .recap-item {
+    grid-template-columns: auto 48px minmax(0, 1fr) auto;
+  }
+
+  .recap-round {
+    display: none;
+  }
+
+  .recap-item .setlist-button {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---------- Head-to-Head ---------- */
 .head-to-head-pickers {
   display: grid;

@@ -59,6 +59,7 @@ let snapshot: PlayerSnapshot = {
   error: null,
 }
 const listeners = new Set<() => void>()
+const endedListeners = new Set<(track: Track) => void>()
 
 function update(patch: Partial<PlayerSnapshot>): void {
   snapshot = { ...snapshot, ...patch }
@@ -74,6 +75,14 @@ export function subscribe(listener: () => void): () => void {
 
 export function getSnapshot(): PlayerSnapshot {
   return snapshot
+}
+
+/** Notifies `listener` whenever a preview plays through to its end (e.g. Blind-Test timeouts). */
+export function onTrackEnded(listener: (track: Track) => void): () => void {
+  endedListeners.add(listener)
+  return () => {
+    endedListeners.delete(listener)
+  }
 }
 
 // ---------- Audio element & progress ticker ----------
@@ -115,7 +124,11 @@ function getAudio(): HTMLAudioElement {
     update({ isPlaying: false, currentTime: element.currentTime })
   }
   element.addEventListener('pause', settle)
-  element.addEventListener('ended', settle)
+  element.addEventListener('ended', () => {
+    settle()
+    const endedTrack = snapshot.track
+    if (endedTrack) for (const listener of endedListeners) listener(endedTrack)
+  })
   element.addEventListener('seeked', () => update({ currentTime: element.currentTime }))
   element.addEventListener('loadedmetadata', () => {
     if (Number.isFinite(element.duration) && element.duration > 0) {

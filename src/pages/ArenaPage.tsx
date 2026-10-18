@@ -51,7 +51,11 @@ function ArenaPage({ tracks, status, error, onRetry, isInSetlist, onToggleSetlis
 
       {status === 'success' && tracks.length > 0 && (
         <>
-          <BlindTestGame tracks={tracks} />
+          <BlindTestGame
+            tracks={tracks}
+            isInSetlist={isInSetlist}
+            onToggleSetlist={onToggleSetlist}
+          />
           <HeadToHead
             tracks={sortedTracks}
             isInSetlist={isInSetlist}

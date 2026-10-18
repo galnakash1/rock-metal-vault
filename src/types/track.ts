@@ -195,13 +195,39 @@ export interface BlindTestRound {
   options: Track[]
 }
 
-export interface BlindTestScore {
-  score: number // total points
+/** How a round ended: a right or wrong guess, or the 30s preview ran out first. */
+export type RoundOutcome = 'correct' | 'wrong' | 'timeout'
+
+export interface RoundResult {
+  track: Track // the round's answer
+  outcome: RoundOutcome
+  points: number
+}
+
+/** A set is 5 rounds and 3 lives: 'victory' = all rounds played with a life left. */
+export type SetStatus = 'playing' | 'victory' | 'game-over'
+
+export interface BlindTestSetSummary {
+  score: number // out of 5,000
   played: number
   correct: number
-  streak: number // current run of correct guesses
-  bestStreak: number // persisted in localStorage
+  livesLeft: number
+  currentStreak: number
+  bestStreak: number // longest run of correct guesses in this set
+  status: SetStatus
 }
+
+/** All-time records, persisted in localStorage. */
+export interface ArenaRecords {
+  highScore: number
+  bestStreak: number
+}
+
+export type RankTitle =
+  | 'Garage Roadie'
+  | 'Mosh Pit Regular'
+  | 'Main Stage Shredder'
+  | 'Immortal Riff God'
 
 export type ComparisonWinner = 'a' | 'b' | 'tie' | 'none' // 'none' = not a contest (e.g. style)
 

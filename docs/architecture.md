@@ -125,7 +125,7 @@ playerEngine.ts (module store, outside React): one <audio> + Web Audio graph
 | `StatusMessage` | One place for the Loading, Error (with optional retry), and Empty / Not-found UI states | `variant`, `message`, `title?`, `onRetry?`, `retryLabel?`, `action?` |
 | `SetlistButton` | "Add to Setlist" / "Remove from Setlist" toggle (label and `aria-label` change with state); calls `preventDefault` + `stopPropagation`, so it never triggers a surrounding card link. `compact` variant on cards | `trackTitle`, `inSetlist`, `onToggle`, `variant?` |
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large display type), Main Stage underbill, origin flags + styles, and tracks/bands/runtime stats; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
-| `BlindTestGame` | Round flow (start → listen → guess → reveal → Next Riff), concealed playback through `playerEngine`, artwork unblurring with playback time, 4 option buttons with green/red feedback, speed-based points, streak, persisted best streak, and accuracy; stops a concealed round on unmount | `tracks` |
+| `BlindTestGame` | Set loop of 5 rounds / 3 lives (amp tubes) → final scoreboard (outcome, rank, stats, records, recap with setlist toggles). Round flow (start → listen → guess or timeout → reveal → Next Riff / See Final Results), concealed playback through `playerEngine`, artwork unblurring with playback time, 4 option buttons with green/red feedback, speed-based points, streak, persisted best streak, and accuracy; stops a concealed round on unmount | `tracks` |
 | `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled "Signature riff tab" or "Practice riff tab"; highlights the playhead column | `tab: GuitarRiffTab`, `subgenre`, `activeStep: number \| null` |
 | `TrackSelect` | Searchable picker: a filter box (title/artist, with a match count) narrowing a labelled `<select>`; the current pick stays listed (used twice in the Head-to-Head) | `id`, `label`, `tracks`, `value`, `onChange` |
 | `HeadToHead` | Track A vs Track B: searchable pickers, contender cards (artwork, origin, style, win badges, preview play, setlist toggle), and the comparison table | `tracks`, `isInSetlist`, `onToggleSetlist` |
@@ -267,13 +267,33 @@ export interface BlindTestRound {
   options: Track[]               // 4 tracks incl. the answer, shuffled, distinct artists
 }
 
-export interface BlindTestScore {
-  score: number                  // total points (speed-based)
+export type RoundOutcome = 'correct' | 'wrong' | 'timeout'
+
+export interface RoundResult {
+  track: Track                   // the round's answer
+  outcome: RoundOutcome
+  points: number
+}
+
+export type SetStatus = 'playing' | 'victory' | 'game-over'
+
+export interface BlindTestSetSummary {   // derived from RoundResult[], never stored
+  score: number                  // out of 5,000
   played: number
   correct: number
-  streak: number
-  bestStreak: number             // persisted in localStorage
+  livesLeft: number              // 3 − wrong − timeouts
+  currentStreak: number
+  bestStreak: number             // longest run in this set
+  status: SetStatus
 }
+
+export interface ArenaRecords {  // all-time, in localStorage
+  highScore: number
+  bestStreak: number
+}
+
+export type RankTitle =
+  | 'Garage Roadie' | 'Mosh Pit Regular' | 'Main Stage Shredder' | 'Immortal Riff God'
 
 export type ComparisonWinner = 'a' | 'b' | 'tie' | 'none'
 
@@ -467,7 +487,10 @@ There are no external state libraries — just React state, custom hooks, and pr
 - `buildBlindTestRound(tracks, { random, excludeIds })` picks the answer with `pickRandomTrack` (skipping the last 15 answers, unless that leaves nothing). It then shuffles the catalog and stable-sorts it by similarity (same style +2, same country +1), so decoys are **realistic** but still random among equals. It takes the first 3 with a **different lead artist** (`getLeadArtistKey`, so "BABYMETAL & …" counts as BABYMETAL) and a **different title** (`normalizeTitleKey`), so exactly one option is right. All 4 are shuffled. It returns `null` when fewer than 4 distinct artists exist.
 - **Playback:** the round plays through the global `playerEngine` with `playTrack(answer, { concealed: true })`. The snapshot's `concealed` flag hides the Now Playing bar (`shouldShowMiniPlayer(…, concealed)`), so the title can't leak. On unmount, `BlindTestGame` calls `stop()` only if concealed playback is still running, so a visible Head-to-Head preview keeps playing. "Next Riff" simply plays the next answer, which replaces the old one.
 - **Reveal:** `getArtworkBlur(player.currentTime, player.duration)` maps 0 → 30 s to 24px → 0px (CSS `filter: blur()` with a short transition, and none under `prefers-reduced-motion`). After a guess the blur is 0, and the alt text only names the album once revealed.
-- **Scoring:** `getGuessPoints(isCorrect, elapsed)` gives 100 base + up to 900 for speed (1000 instant, 100 at the end, 0 when wrong). `applyGuess(score, isCorrect, points)` returns the next `BlindTestScore` (a miss resets the streak; `bestStreak = max`). The best streak is saved with `saveBestStreak` under `rmv:arena:best-streak` and loaded lazily on mount.
+- **Scoring:** `getGuessPoints(isCorrect, elapsed)` gives 100 base + up to 900 for speed (1000 instant, 100 at the end, 0 when wrong), so a perfect set scores `MAX_SET_SCORE` = 5,000.
+- **Set loop (5 rounds, 3 lives):** `BlindTestGame` keeps `phase` (`'intro' | 'round' | 'summary'`) and the set's `RoundResult[]`. Everything else is derived by `summarizeSet(results)`: score, accuracy, `livesLeft` (3 − wrong − timeouts), current and best streak, and `status` via `getSetStatus(roundsPlayed, livesLeft)`. Losing the last life is `'game-over'` even on round 5; otherwise 5 rounds is `'victory'`. When the result that ends the set is recorded, `mergeArenaRecords` raises the all-time high score and best streak (saved with `saveArenaRecords` under `rmv:arena:high-score` / `rmv:arena:best-streak`), and "new record" flags are kept for the scoreboard.
+- **Timeouts:** the player engine emits `onTrackEnded(track)` when a preview plays to its end. While a round is unanswered, the game subscribes and records a `'timeout'` (0 points, −1 life) if the ended track is the round's concealed answer.
+- **Final scoreboard:** after the set's last result the button reads "See Final Results". It stops concealed audio and switches to the summary: an outcome banner (focused for screen readers), a rank from `getRankTitle(score)`, stats, all-time records, and a round-by-round recap (✅/❌ with an accessible label, points, a detail link, and a `SetlistButton`). "Play New Set" clears the results and starts round 1.
 - **Head-to-Head:** `HeadToHead` keeps `trackAId` / `trackBId` (defaults: the first track, against the first track by a different artist). `compareTracks(a, b)` builds the rows: Duration (longer wins, "Longer"), Released (earlier wins, "Vintage"; `none` if a year is unknown), plus Style, Origin, Guitar tuning, and Riff tempo from `getTrackRiffTab` (no winner). Only the small `PreviewToggle` buttons subscribe to the player, so the two ~290-option pickers don't re-render during playback.
 
 ## 5b. Music-Data Enrichments
@@ -522,8 +545,11 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `shuffle` / `pickRandomTrack` | `(items, random?) => T[]` / `(tracks, random?) => Track \| null` | Fisher–Yates on a copy / random pick; injectable RNG for deterministic tests | ✅ Task 7 |
 | `buildBlindTestRound` | `(tracks, { random?, excludeIds? }) => BlindTestRound \| null` | Answer + 3 realistic decoys (style/country first) by different lead artists and titles, shuffled | ✅ Task 7 |
 | `getArtworkBlur` | `(elapsedSec, totalSec?, maxBlurPx?) => number` | Linear 24px → 0px over 30s, clamped; NaN-safe | ✅ Task 7 |
-| `getGuessPoints` / `applyGuess` / `INITIAL_BLIND_TEST_SCORE` | `(isCorrect, elapsedSec, totalSec?) => number` / `(score, isCorrect, points) => BlindTestScore` | Speed scoring (1000 → 100, 0 when wrong); streak / best-streak update | ✅ Task 7 |
-| `parseBestStreak` / `loadBestStreak` / `saveBestStreak` | `(raw) => number` / `(storage) => number` / `(storage, n) => boolean` | Best streak in `localStorage` (`rmv:arena:best-streak`), never throws | ✅ Task 7 |
+| `getGuessPoints` / `MAX_SET_SCORE` | `(isCorrect, elapsedSec, totalSec?) => number` / `5000` | Speed scoring (1000 → 100, 0 when wrong) | ✅ Task 7 |
+| `ROUNDS_PER_SET` / `LIVES_PER_SET` / `getSetStatus` | `5` / `3` / `(roundsPlayed, livesLeft) => SetStatus` | Game-over evaluation: no lives → `'game-over'` (even on round 5), 5 rounds → `'victory'` | ✅ set loop |
+| `summarizeSet` | `(results: RoundResult[]) => BlindTestSetSummary` | Score, accuracy, lives left, current and best streak, and status, all derived | ✅ set loop |
+| `getRankTitle` | `(score) => RankTitle` | < 1000 Garage Roadie · < 2500 Mosh Pit Regular · < 4000 Main Stage Shredder · else Immortal Riff God | ✅ set loop |
+| `parseStoredCount` / `loadArenaRecords` / `saveArenaRecords` / `mergeArenaRecords` | `(raw) => number` / `(storage) => ArenaRecords` / `(storage, records) => boolean` / `(records, set) => ArenaRecords` | All-time high score + best streak in `localStorage`; only ever go up; never throw | ✅ set loop |
 | `compareTracks` | `(a: Track, b: Track) => ComparisonRow[]` | Duration (longer) and Released (earlier) contests, plus style, origin, tuning, tempo | ✅ Task 7 |
 
 ### `src/utils/artistMetadata.ts`

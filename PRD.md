@@ -60,7 +60,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 - **Fast loading:** tracks render as soon as the fastest request lands (progressive rendering), and later responses merge in. The finished catalog is cached in memory and in **`localStorage`** for 6 hours, so reloads and new tabs show it instantly with no requests.
 - **Rate-limit protection:** concurrent loads (e.g. React StrictMode's double mount) share one in-flight batch, and cached loads make no requests. **Retry** bypasses the cache. If some requests fail, the rest still load the catalog.
 - Generic searches also match off-genre hits (e.g. "Jingle Bell Rock", country songs), so a track is kept only when its `primaryGenreName` is on a rock/metal allowlist (Rock, Hard Rock, Metal, Punk, Grunge, …) **or** its artist is a curated rock/metal band — whatever Apple files the album under (Orphaned Land, Wardruna and KALEO may be "World", "Worldwide", or "Alternative"). iTunes' "Alternative" genre mixes rock bands with pop acts (e.g. twenty one pilots), so it isn't on the allowlist; curated bands such as Linkin Park still get in.
-- **Band origin & style enrichment:** Apple's `country` field is the storefront ("USA"), not where a band formed. During normalization, each track is enriched from a curated map of ~170 rock/metal/metalcore artists with `originCountry` + `originFlag` (19 countries, from United States 🇺🇸 and United Kingdom 🇬🇧 to Israel 🇮🇱, Sweden 🇸🇪, Finland 🇫🇮, Norway 🇳🇴, Iceland 🇮🇸, Ukraine 🇺🇦, Brazil 🇧🇷 and Japan 🇯🇵) and a `subgenre` (Metalcore, Melodic Death Metal, Black Metal, Oriental / Folk Metal, Kawaii Metal, …). Matching uses Apple's **artist id** first (so a hip-hop "Ghost" never becomes Sweden's Ghost), then the accent- and case-insensitive name. Unlisted artists fall back deterministically to **"Unknown" 🌐** (a country is never guessed) and a style derived from the iTunes genre.
+- **Band origin & style enrichment:** Apple's `country` field is the storefront ("USA"), not where a band formed. During normalization, each track is enriched from a curated map of 165 rock/metal/metalcore artists with `originCountry` + `originFlag` (19 countries, from United States 🇺🇸 and United Kingdom 🇬🇧 to Israel 🇮🇱, Sweden 🇸🇪, Finland 🇫🇮, Norway 🇳🇴, Iceland 🇮🇸, Ukraine 🇺🇦, Brazil 🇧🇷 and Japan 🇯🇵) and a `subgenre` (Metalcore, Melodic Death Metal, Black Metal, Oriental / Folk Metal, Kawaii Metal, …). Matching uses Apple's **artist id** first (so a hip-hop "Ghost" never becomes Sweden's Ghost), then the accent- and case-insensitive name. Unlisted artists fall back deterministically to **"Unknown" 🌐** (a country is never guessed) and a style derived from the iTunes genre.
 - Fields used: `trackId`, `artistId`, `trackName`, `artistName`, `collectionName`, `artworkUrl100`, `previewUrl`, `trackTimeMillis`, `primaryGenreName`, `releaseDate`, `trackExplicitness`, `trackCount`.
 - Artwork is upgraded from `100x100` to `600x600` by rewriting the URL (`…/100x100bb.jpg` → `…/600x600bb.jpg`).
 - Results without a `previewUrl` are dropped, because every track in the Vault must be playable.
@@ -140,7 +140,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 ## 6. Acceptance Criteria
 
 1. **When I** open `/`, **I see** a loading message, and then a grid of rock/metal track cards fetched from the iTunes API.
-2. **When I** open `/` while the network request fails, **I see** an error message that explains the problem, plus a "Try again" button.
+2. **When I** open `/` while the network request fails, **I see** an error message that explains the problem, plus a "Retry" button that fetches again.
 3. **When I** type "metallica" into the search box, **I see** the list immediately narrow to tracks whose title, artist, or album contains "metallica", ignoring case.
 4. **When I** choose an Origin Country, Style, or Artist from the filters, **I see** only matching tracks, along with an updated results count.
 5. **When I** choose "Longest duration" in the sort selector, **I see** the cards reordered from the longest track to the shortest.
@@ -153,7 +153,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 12. **When I** visit `/tracks/123` with an id that doesn't exist, **I see** a "Track not found" message and a link back to the Vault.
 13. **When I** click "Add to Setlist" on a card or detail page, **I see** the button switch to "Remove from Setlist" and the Navbar setlist count increase by one.
 14. **When I** open `/setlist` with saved tracks, **I see** a festival poster with Headliners in large type, Main Stage acts below, origin flags and styles, and the total festival runtime. **When I** pick another poster theme, **I see** the poster restyle instantly.
-15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear setlist", **I see** the poster and runtime update immediately.
+15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear Lineup", **I see** the poster and runtime update immediately.
 16. **When I** start a Riff Blind-Test round in `/arena`, **I see** blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** green for the right answer (and red for my wrong pick), the points I earned for my speed, and the round counter, lives, score, and streak update. **When I** finish 5 rounds or lose my 3rd life, **I see** a final scoreboard with my rank, score out of 5,000, accuracy, records, and a recap of every track with Add to Setlist buttons.
 17. **When I** pick two tracks in the Head-to-Head section, **I see** them side by side with origin, style, duration, release year, tuning, and tempo, with the longer track and the earlier release highlighted.
 18. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
@@ -163,7 +163,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint`, and `npm test` all pass with zero errors.
-- **Testing:** at least 8–10 meaningful unit tests (Vitest) covering the real logic in `src/utils/` — formatting, normalization, enrichment, filtering, moods, sorting, and riff tabs.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **114 tests in 5 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 
@@ -178,5 +178,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 
 ## 9. Further Reading
 
+- How to run the app and its tests: **[README.md](README.md)**
 - Component hierarchy, types, state strategy, and tested utilities: **[docs/architecture.md](docs/architecture.md)**
 - Step-by-step build plan: **[tasks.md](tasks.md)**
+- The prompt log of how the project was built with an AI agent: **[PROMPTS.md](PROMPTS.md)**

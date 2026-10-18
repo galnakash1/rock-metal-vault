@@ -19,10 +19,11 @@ src/
 │   └── audio.ts              # EQ preset types
 │
 ├── data/
-│   └── mockTracks.json       # 9 rock/metal tracks in raw iTunes shape (Task 1; later a test fixture)
+│   └── mockTracks.json       # 10 real iTunes records (raw shape) — the deterministic test fixture
 │
 ├── api/
-│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh }): 3 searches + 1 artist lookup, cached
+│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 4 lookups,
+│   │                         #   progressive merge, memory + localStorage cache
 │   └── itunes.test.ts        # request-plan tests (no network)
 │
 ├── audio/
@@ -40,7 +41,7 @@ src/
 │   ├── catalogCache.ts       # localStorage catalog cache (serialize / parse with TTL) + progressive merge
 │   ├── catalogCache.test.ts
 │   ├── artistMetadata.ts     # Curated artist → origin country/flag + subgenre map, with fallback
-│   ├── riffTabs.ts           # Style-based 6-string practice riffs: profiles, templates, renderer
+│   ├── riffTabs.ts           # 6-string tabs: signature riffs + style-based practice riffs, renderer, playhead
 │   ├── audioUtils.ts         # Pure functions: EQ presets, frequency bucketing for the visualizer
 │   └── audioUtils.test.ts
 │
@@ -497,7 +498,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ### Band origin & style (`artistMetadata.ts`)
 
-- `ARTIST_ENTRIES` is a curated list of ~170 rock/metal/metalcore artists (`[name, originCountry, subgenre, itunesArtistId?]`) across 19 countries, stored in a `Map` keyed by `normalizeArtistKey(name)`. The key is accent-stripped ("Sólstafir" → "solstafir"), lowercased, has a trailing `"(US)"`-style qualifier removed, uses straight quotes, and has its whitespace collapsed. The ~60 international "spotlight" bands carry their Apple artist id, which feeds `SPOTLIGHT_ARTIST_IDS` (the Lookup request).
+- `ARTIST_ENTRIES` is a curated list of 165 rock/metal/metalcore artists (`[name, originCountry, subgenre, itunesArtistId?]`) across 19 countries, stored in a `Map` keyed by `normalizeArtistKey(name)`. The key is accent-stripped ("Sólstafir" → "solstafir"), lowercased, has a trailing `"(US)"`-style qualifier removed, uses straight quotes, and has its whitespace collapsed. The ~60 international "spotlight" bands carry their Apple artist id, which feeds `SPOTLIGHT_ARTIST_IDS` (the Lookup request).
 - `findArtistMetadata(artist, artistId?, genre?)` matches in order: (1) the **Apple artist id** (survives credits like "BABYMETAL & Electric Callboy"); (2) the normalized name, unless the ids differ **and** the genre isn't rock/metal, which marks a **namesake** (hip-hop "Ghost", electronic "Avatar"); (3) the **lead artist** of a collaboration. It returns `null` when the artist isn't listed.
 - `getArtistMetadata(artist, itunesGenre, artistId?)` never fails. Unlisted artists get `originCountry: 'Unknown'` (we never guess a country) and a style mapped from the iTunes genre (`Metal` → Heavy Metal, `Punk` → Punk Rock, … else `Rock`).
 - `normalizeTrack` calls it, so every `Track` (live or fixture) carries `originCountry`, `originFlag` (`COUNTRY_FLAGS`), and `subgenre`.
@@ -515,7 +516,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Functions marked ✅ are covered in Task 4. The rest get tests in the task that introduces them.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **114 tests in 5 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 

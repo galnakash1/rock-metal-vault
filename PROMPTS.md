@@ -348,3 +348,30 @@ Tested the 5-round + 3 amp-tube lives game loop in /arena: verified both "Set Co
 > Stop after completing Task 8 and explain what changed in 3 sentences.
 > </pasted_content id="5dbb">
 Reviewed the new dark-mode Rock/Metal CSS design across all routes on desktop and mobile viewports (checked the brushed-metal Amp Console, sticky guitar tab strings, all 3 festival poster themes, and flickering/cracked amp tubes in Arena). Marked Task 8 as done in tasks.md.
+**18:19 · claude**
+
+> <pasted_content id="5dbb">
+> Task 8 is verified and committed—the dark-mode Rock/Metal styling and mobile responsiveness look fantastic. Now please proceed with our final task, **Task 9** from `tasks.md`:
+> 
+> 1. **Write the Project `README.md`:**
+>    - Replace the starter `README.md` with a comprehensive, well-structured documentation file covering all required course sections:
+>      - **Project Title & Overview:** What **Rock & Metal Vault** does, who it is for, and its 4 routes (`/` Vault Catalog, `/tracks/:id` Track Detail with Amp Console & 6-String Guitar Riff Tab, `/setlist` Festival Lineup & Poster Builder, `/arena` Riff Blind-Test & Head-to-Head Track Battle, plus `*` 404 page).
+>      - **Signature Features:** Brief highlights of the Sonic Mood Capsules, Country/Style enrichment & filtering (19 countries including Israel & Scandinavia, 32 styles), Web Audio API Amp Console (3-band EQ presets + live frequency visualizer + persistent Mini-Player), 6-String Guitar Riff Tabs, Festival Poster themes, and the 5-round / 3-amp-tube Riff Blind-Test game.
+>      - **How to Run Locally:** Exact commands for `npm install`, `npm run dev`, `npm run build`, and `npm run preview`.
+>      - **How to Run Unit Tests:** Exact commands for `npm test` (headless Vitest run of all 114+ unit tests) and `npm run test:ui` (Vitest browser UI dashboard).
+>      - **API & Data Architecture:** Explain how the app uses the public, keyless Apple iTunes Search & Lookup API (`https://itunes.apple.com/search` and `https://itunes.apple.com/lookup`), progressive loading + `localStorage` caching, and artist metadata enrichment (`originCountry`, `originFlag`, `subgenre`).
+>      - **Project Documentation Links:** Links to `PRD.md`, `tasks.md`, `docs/architecture.md`, and `PROMPTS.md`.
+> 
+> 2. **Housekeeping & Cleanup:**
+>    - Remove any unused Vite boilerplate assets (such as unused `src/assets/react.svg` if not imported anywhere).
+>    - Ensure `PRD.md`, `docs/architecture.md`, and `tasks.md` match the final shipped codebase accurately.
+> 
+> 3. **Full Rubric Audit:**
+>    - Verify every mandatory requirement one last time:
+>      - Zero `any` across all `.ts` and `.tsx` files.
+>      - `npm run build`, `npm run lint`, and `npm test` pass with zero errors or warnings.
+>      - Zero console errors or warnings when navigating across all routes in headless Chrome.
+> 
+> Stop after completing Task 9 and summarize the final verification results in 3 sentences.
+> </pasted_content id="5dbb">
+Reviewed final README.md, verified removal of unused Vite starter assets, and confirmed npm test (114 tests), npm run lint, and npm run build pass with zero errors. Marked Task 9 as done in tasks.md.

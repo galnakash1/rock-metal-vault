@@ -121,7 +121,7 @@
 
 ## UX fixes (between Tasks 6 and 7) — Remembered filters, persistent audio, faster loading
 
-- [ ] **Goal:** Fix 3 issues found while testing in the browser.
+- [x] **Goal:** Fix 3 issues found while testing in the browser.
 - **Files:** `src/App.tsx`, `src/pages/CatalogPage.tsx`, `src/components/FilterBar.tsx`, `src/audio/playerEngine.ts`, `src/hooks/usePlayer.ts` (replaces `useAmpConsole.ts`), `src/components/AudioPreviewPlayer.tsx`, `src/components/MiniPlayer.tsx`, `src/pages/TrackDetailPage.tsx`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/audioUtils.ts`, `src/App.css` (+ tests)
 - **Steps:**
   1. Lift `TrackFilters` (incl. sort) from `CatalogPage` into `App`, so filters survive navigation.
@@ -172,11 +172,15 @@
 
 ## Task 9 — Final polish, README, and verification
 
-- [ ] **Goal:** Ship-ready project.
-- **Files:** `README.md`, plus any small fixes
+- [x] **Goal:** Ship-ready project.
+- **Files:** `README.md`, `public/favicon.svg`, `PRD.md`, `docs/architecture.md`, `tasks.md`; removed `src/assets/*` and `public/icons.svg`
 - **Steps:**
-  1. Rewrite `README.md`: what the app does, the four signature features, the pages, the tech stack, how to install and run it (`npm install`, `npm run dev`), how to test (`npm test`, `npm run test:ui`), the API used (the iTunes Search API endpoint and its fields), the project structure, and links to `PRD.md`, `docs/architecture.md`, and `tasks.md`.
-  2. Remove leftover Vite template assets and unused code; make sure there is no `any` and no `console.log`.
-  3. Walk through every acceptance criterion in `PRD.md` by hand.
-  4. Run `npm run lint`, `npm test`, and `npm run build`.
-- **Done when:** `npm run build` and `npm test` both finish with zero errors (and `npm run lint` is clean); every PRD acceptance criterion is verified; and the README lets a new developer run the app and its tests from scratch.
+  1. Rewrite `README.md`:
+     - overview and routes, signature features, and tech stack;
+     - how to run (`npm install`, `npm run dev`, `npm run build`, `npm run preview`) and test (`npm test`, `npm run test:ui`);
+     - the API and data architecture (Search + Lookup endpoints, progressive loading, the `localStorage` cache, enrichment);
+     - the project structure, and links to `PRD.md`, `tasks.md`, `docs/architecture.md`, and `PROMPTS.md`.
+  2. Remove leftover Vite template assets (`src/assets/hero.png`, `react.svg`, `vite.svg`, `public/icons.svg`) and replace the Vite favicon with a guitar-pick icon. Make sure there is no `any`, `console.*`, or `debugger` in `src`.
+  3. Align `PRD.md` and `docs/architecture.md` with the shipped code (curated artist count, fixture size, request plan, UI labels "Retry" and "Clear Lineup", the test count, and documentation links).
+  4. Audit: `npm run build`, `npm run lint --max-warnings 0`, and `npm test`. Then walk every route and the main flows in headless Chrome (dev server with StrictMode, and the production build), recording console messages, exceptions, browser log entries, and failed requests.
+- **Done when:** build, lint, and the 114 tests pass with zero errors or warnings; there is no `any`; both browser runs report zero console, browser, or network issues across `/`, `/tracks/:id`, `/setlist`, `/arena`, the 404 page, and an unknown track id; and the README lets a new developer run the app and its tests from scratch.

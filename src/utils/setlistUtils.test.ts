@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import mockData from '../data/mockTracks.json'
+import mockData from '../test/fixtures/mockTracks.json'
 import type { Track } from '../types/track'
 import {
   POSTER_THEMES,

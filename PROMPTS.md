@@ -484,3 +484,34 @@ Verified all 10 improvements in Upgrade 2: instant Back to Vault navigation (~6m
 > Stop when done and summarize in 3 sentences.
 > </pasted_content id="5dbb">
 Verified that Limp Bizkit (25 tracks), Saliva (9 tracks), and all 11 tracks from Bring Me The Horizon's Sempiternal album load cleanly with original studio artwork (including filtering out "Greatest Hitz"). All 178 unit tests pass.
+## 2026-10-29
+
+**18:19 · claude**
+
+> <pasted_content id="5dbb">
+> I just reviewed the official final course syllabus and grading rubric for my 7-minute live defense next week. Please perform a complete, strict audit of the project against the lecturer's exact instructions and make the following targeted adjustments so we score 100/100 with zero deductions:
+> 
+> 1. **Format `tasks.md` to Strictly Match the "Up to 12 Tasks" Rule:**
+>    - The syllabus specifies: "`tasks.md` — up to 12 tasks in build order, each with a `Done when:` line."
+>    - Because we added several unnumbered upgrade sections after Task 9 (`Catalog expansion`, `UX fixes`, `Blind-Test set loop`, `Upgrade`, `Upgrade 2`), please consolidate and format `tasks.md` into **12 sequential numbered tasks (`Task 1` through `Task 12`)** in chronological build order, where every single task has a ticked checkbox (`- [x]`) and a clear `Done when:` acceptance line.
+> 
+> 2. **Make `npm run test:ui` Open Seamlessly Without Token Trouble:**
+>    - The syllabus explicitly requires running tests in the browser via `@vitest/ui` (`npm run test:ui`).
+>    - Earlier, opening the bare localhost URL showed "Vitest UI requires authentication. Open the URL with the token...". Update `"test:ui"` in `package.json` to `"vitest --ui --open"` (or configure `vite.config.ts` / Vitest UI) so running `npm run test:ui` automatically launches the browser with the authenticated token URL ready to view.
+> 
+> 3. **Verify `useEffect` + `fetch` + 3 Screen States (`loading`, `error`, `success`) & API Purity:**
+>    - The rubric deducts points for "data pasted manually instead of coming from the API" and specifically checks for "`fetch` inside `useEffect`" and "three states on screen: loading, error, has data".
+>    - Inspect `src/App.tsx` and `src/api/itunes.ts` to ensure:
+>      a) The `useEffect` in `App.tsx` clearly orchestrates the catalog fetch and clearly manages the 3 states (`loading`, `error`, `success` / `ready`) in a way that is easy for me to point to and explain during my live Zoom defense.
+>      b) Any sample track fixtures (from Task 1 / unit tests) live strictly in test/fixture scope and are never used as hardcoded app catalog data, and `README.md` + `docs/architecture.md` explicitly state that 100% of catalog tracks are fetched live from the keyless public Apple iTunes API (`https://itunes.apple.com/search` & `https://itunes.apple.com/lookup`).
+> 
+> 4. **Check All Mandatory Rubric Items Across the Codebase:**
+>    - **Zero `any`:** Confirm zero `any`, `@ts-ignore`, `@ts-expect-error`, or `console.*` across all `.ts` and `.tsx` files.
+>    - **Components:** Confirm at least 4 reusable custom components (excluding pages) live in separate files in `src/components/` with typed props.
+>    - **Routing & `useParams`:** Confirm React Router routes (`/`, `/tracks/:id`, `/setlist`, `/arena`, `/builder`, `*`), `useParams` in `TrackDetailPage.tsx`, `.map()` with unique `key={track.id}`, and `NavLink` in `Navbar.tsx`.
+>    - **Build, Lint & Tests:** Run `npm test`, `npm run lint -- --max-warnings 0`, and `npm run build` and verify zero errors/warnings.
+>    - **Docs Sync:** Ensure `README.md`, `PRD.md` (with "When I..., I see..." lines and link to `docs/architecture.md`), `tasks.md` (12 tasks), and `docs/architecture.md` are 100% synchronized.
+> 
+> Stop when done and provide a clear summary of what was updated and verified.
+> </pasted_content id="5dbb">
+Completed final pre-defense rubric audit: consolidated tasks.md into 12 numbered tasks, moved mockTracks.json to src/test/fixtures/, added automatic token launcher for npm run test:ui, and verified all 178 unit tests, build, and lint checks pass with zero warnings.

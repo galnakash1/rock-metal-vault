@@ -23,7 +23,11 @@ import { DEFAULT_FILTERS } from './utils/trackUtils'
 import './App.css'
 
 function App() {
-  // A cached catalog (memory or localStorage) renders on the very first frame, with no loading state.
+  // ---- Catalog: 100% live from Apple's public iTunes Search & Lookup API ----
+  // Three screen states, shown by every page through <StatusMessage>:
+  //   'loading' → spinner · 'error' → message + Retry · 'success' → the tracks.
+  // A catalog the API returned earlier (cached in memory / localStorage for 6 h) starts in
+  // 'success' on the first frame; there is no hardcoded track data in the app.
   const [tracks, setTracks] = useState<Track[]>(() => getCachedCatalog() ?? [])
   const [status, setStatus] = useState<FetchStatus>(() => (getCachedCatalog() ? 'success' : 'loading'))
   // False while later batch responses are still being merged in (progressive loading).
@@ -35,6 +39,8 @@ function App() {
   // Catalog filters live here (not in CatalogPage) so they survive visits to other routes.
   const [catalogFilters, setCatalogFilters] = useState<TrackFilters>(DEFAULT_FILTERS)
 
+  // fetch inside useEffect: fetchCatalog() (src/api/itunes.ts) calls fetch() for every Search /
+  // Lookup request. Re-runs when Retry bumps requestId; the AbortController ignores stale results.
   useEffect(() => {
     const controller = new AbortController()
 
@@ -46,14 +52,14 @@ function App() {
       onProgress: (tracksSoFar) => {
         if (controller.signal.aborted) return
         setTracks(tracksSoFar)
-        setStatus('success')
+        setStatus('success') // state 3: has data (more responses still merging in)
         setIsCatalogComplete(false)
       },
     })
       .then((catalog) => {
         if (controller.signal.aborted) return
         setTracks(catalog)
-        setStatus('success')
+        setStatus('success') // state 3: has data (complete catalog)
         setIsCatalogComplete(true)
       })
       .catch((fetchError: unknown) => {
@@ -64,7 +70,7 @@ function App() {
             ? fetchError.message
             : 'Something went wrong while loading the Vault.',
         )
-        setStatus('error')
+        setStatus('error') // state 2: error, with a Retry button
       })
 
     return () => controller.abort()
@@ -72,7 +78,7 @@ function App() {
 
   const handleRetry = () => {
     setError(null)
-    setStatus('loading')
+    setStatus('loading') // state 1: loading (initial state on a cold start, and on every Retry)
     setIsCatalogComplete(false)
     setRequestId((id) => id + 1)
   }

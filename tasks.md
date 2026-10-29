@@ -4,21 +4,25 @@
 
 **Rules (see [AGENTS.md](AGENTS.md)):** one task at a time, in order. At the end of each task, stop and explain what changed in 3 sentences. The developer reviews and runs `git commit`; the agent never commits.
 
-**Signature features (exactly four, nothing extra):** ① Sonic Mood Capsules (Task 4 logic, Task 5 UI) · ② Amp Console Player (Task 5) · ③ Festival Poster Builder (Task 6) · ④ Riff Blind-Test Challenge (Task 7).
+**12 tasks, in build order.** Tasks 1–9 match the "(Task N)" labels in the git history; Tasks 10–12 are the upgrades made after hands-on browser testing.
+
+**Signature features (five):** ① Sonic Mood Capsules (Task 4 logic, Task 5 UI) · ② Amp Console Player (Task 5, persistent from Task 7) · ③ Festival Poster Builder (Task 6) · ④ Riff Blind-Test (Task 7, a 4-stage tournament from Task 11) · ⑤ Playlist Builder (Task 11).
 
 **Music-data enrichments:** Band Origin & Style, Country/Style filtering, and the 6-String Guitar Riff Tab (Task 4 logic and tests, Task 5 UI).
+
+**Data rule:** every catalog track comes live from Apple's public, keyless iTunes API (`https://itunes.apple.com/search` and `https://itunes.apple.com/lookup`). The 10-record sample in `src/test/fixtures/mockTracks.json` is used by the unit tests only.
 
 ---
 
 ## Task 1 — Types, mock data, utilities, and a static list
 
 - [x] **Goal:** Lay the typed data foundation and render something real on screen.
-- **Files:** `src/types/track.ts`, `src/data/mockTracks.json`, `src/utils/trackUtils.ts`, `src/App.tsx` (and clean up the Vite template in `App.css` / `index.css`)
+- **Files:** `src/types/track.ts`, `mockTracks.json` (today `src/test/fixtures/mockTracks.json`, see Task 12), `src/utils/trackUtils.ts`, `src/App.tsx` (and clean up the Vite template in `App.css` / `index.css`)
 - **Steps:**
   1. In `src/types/track.ts`, define `ITunesTrackRaw`, `ITunesSearchResponse`, `Track`, `TrackFilters`, `SortKey`, and `FetchStatus`, as described in the architecture doc.
-  2. Create `src/data/mockTracks.json` with **8–10 rock/metal tracks** in the raw iTunes response shape (`{ resultCount, results: [...] }`).
+  2. Create `mockTracks.json` with **8–10 rock/metal tracks** in the raw iTunes response shape (`{ resultCount, results: [...] }`).
   3. In `src/utils/trackUtils.ts`, implement `formatDuration`, `upgradeArtworkUrl`, `getReleaseYear`, `normalizeTrack`, `dedupeTracks`, `normalizeTracks`, `filterTracks`, `sortTracks`, `getTotalDuration`, `getUniqueGenres`, and `getUniqueArtists`.
-  4. In `App.tsx`, import the mock JSON, normalize it, and render a simple static list (artwork, title, artist, `mm:ss` duration).
+  4. In `App.tsx`, temporarily import the mock JSON, normalize it, and render a simple static list (artwork, title, artist, `mm:ss` duration). Task 3 replaces it with the live API.
 - **Done when:** `npm run dev` shows the mock tracks with formatted `mm:ss` durations, and `npm run build` passes with zero TypeScript errors and no `any`.
 
 ---
@@ -44,7 +48,7 @@
 - **Files:** `src/api/itunes.ts`, `src/utils/trackUtils.ts`, `src/components/StatusMessage.tsx`, `src/App.tsx`, the pages
 - **Steps:**
   1. In `src/api/itunes.ts`, write `fetchCatalog(signal)`. It fetches `rock`, `metal`, and `metalcore` (`media=music&entity=song&limit=50`) in parallel, checks `response.ok`, validates the bodies (`parseSearchResults`), normalizes and de-duplicates the results by `trackId`, and keeps only rock/metal-family genres (`isRockOrMetalGenre` allowlist).
-  2. In `App.tsx`, call `fetchCatalog` inside `useEffect` with an `AbortController` cleanup, holding `tracks`, `status`, and `error` in state, plus a `requestId` counter that Retry bumps to re-run the effect.
+  2. In `App.tsx`, call `fetchCatalog` inside `useEffect` with an `AbortController` cleanup, holding `tracks`, `status` (`'loading' | 'error' | 'success'`), and `error` in state, plus a `requestId` counter that Retry bumps to re-run the effect.
   3. Build the reusable `StatusMessage` component (`loading` / `error` with an optional retry / `empty`).
   4. Pass `tracks`, `status`, `error`, and `onRetry` down as props to Catalog, Detail, and Arena.
   5. Keep `mockTracks.json` as the test fixture only; the UI no longer imports it.
@@ -55,14 +59,14 @@
 ## Task 4 — Music-data enrichments, Mood Capsule logic, Vitest, and unit tests
 
 - [x] **Goal:** Enrich the track model, finish the pure logic for moods, filters and riff tabs, and prove it all works with automated tests.
-- **Files:** `package.json`, `src/types/track.ts`, `src/types/riff.ts`, `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/api/itunes.ts`, `src/data/mockTracks.json`, `src/utils/trackUtils.test.ts`
+- **Files:** `package.json`, `src/types/track.ts`, `src/types/riff.ts`, `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/api/itunes.ts`, `mockTracks.json`, `src/utils/trackUtils.test.ts`
 - **Steps:**
   1. **Band origin & style:** add the `OriginCountry`, `Subgenre`, and `ArtistMetadata` types, and add `originCountry`, `originFlag`, and `subgenre` to `Track`. Create `artistMetadata.ts`, a curated artist map with case/qualifier/collaboration-tolerant lookup and a deterministic "Unknown" + genre-derived fallback. `normalizeTrack` enriches every track.
   2. **Tighter catalog:** drop "Alternative" from the genre allowlist and add `isVaultTrack` (allowlisted genre **or** curated artist), used by `fetchCatalog`.
   3. **Moods & filters** (signature ①, logic only): add `MoodId` / `MoodCapsule`, `MOOD_CAPSULES`, and `matchesMood`. Extend `TrackFilters` with `country`, `subgenre`, and `mood` (Style replaces the coarse genre filter). `filterTracks` applies all of them, and search also matches subgenre and country. Add `getUniqueCountries` and `getUniqueSubgenres`.
   4. **Guitar Riff Tab:** add `src/types/riff.ts` (`GuitarRiffTab`, …) and `riffTabs.ts` (style profiles, templates, `renderTab`, and `getTrackRiffTab`). These are style-based practice riffs, not transcriptions.
   5. Add a 10th fixture track (AC/DC, Australia) so country filters cover three countries.
-  6. Run `npm install -D vitest @vitest/ui`, then add the scripts `"test": "vitest run"` and `"test:ui": "vitest --ui"`.
+  6. Run `npm install -D vitest @vitest/ui`, then add the scripts `"test": "vitest run"` and `"test:ui"` (the browser UI; launcher added in Task 12).
   7. Write **8–10+ meaningful tests** in `src/utils/trackUtils.test.ts`, using `mockTracks.json` (loaded through `parseSearchResults`) plus edge cases:
      - `formatDuration` (`mm:ss`, ≥ 1 hour, invalid input) and `getTotalDuration` (setlist total, empty list)
      - `upgradeArtworkUrl` (`100x100bb` → `600x600bb`, custom size, non-matching URLs)
@@ -80,80 +84,49 @@
 - [x] **Goal:** Make the catalog interactive, and give the detail page its signature player and riff tab.
 - **Files:** `src/components/TrackCard.tsx`, `src/components/FilterBar.tsx`, `src/components/MoodCapsules.tsx`, `src/components/AudioPreviewPlayer.tsx`, `src/components/RiffTabPanel.tsx`, `src/hooks/useAmpConsole.ts`, `src/types/audio.ts`, `src/utils/audioUtils.ts` (+ tests), `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`
 - **Steps:**
-  0. Data touches: add HARDY to `artistMetadata.ts`; add simplified **signature riff tabs** for iconic songs to `riffTabs.ts` (practice riffs stay the default), plus `getTabColumns` and `getRiffPlayheadIndex` with tests.
-  1. Build `TrackCard`: artwork, title, artist, origin flag + country, style badge, release year, duration, and an explicit badge. It links to the detail page and has an `actions` slot for the Task 6 setlist toggle.
-  2. Build `FilterBar`: a controlled search input with a Reset filters button, the mood pills, Origin Country select (flag + name), Style/Subgenre select, Artist select, sort select, and a live summary ("Showing X of Y tracks · total duration"). Every control has a `<label>`.
-  3. Build `MoodCapsules` (signature ①): 4 toggle pills with `aria-pressed`; clicking the active pill clears it.
-  4. In `CatalogPage`, keep `filters: TrackFilters` (including `mood`) in `useState`, and derive the visible list with `useMemo(sortTracks(filterTracks(tracks, filters), filters.sort))`. Show an `empty` `StatusMessage` when nothing matches.
-  5. Add `EQ_PRESETS` and `bucketFrequencies` to `audioUtils.ts`, with tests.
-  6. Write the `useAmpConsole` hook. It creates the `AudioContext` lazily on the first play, then wires the source → lowshelf/peaking/highshelf filters → analyser → destination. Preset changes use `setTargetAtTime`, and the hook cleans up the animation frame and context on unmount.
-  7. Build `AudioPreviewPlayer` as the Amp Console (signature ②): `<audio crossOrigin="anonymous">`, play/pause and progress controls, a `<canvas>` frequency-bar visualizer, and 4 EQ preset buttons (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`). It replaces the placeholder player on `TrackDetailPage`.
-  8. Build `RiffTabPanel`: a monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty, labelled as a signature or practice riff, with a playhead column synced to the Amp Console's playback. Show it on `TrackDetailPage` next to the Amp Console, along with the origin flag/country and style in the track facts.
+  1. Data touches: add HARDY to `artistMetadata.ts`; add simplified **signature riff tabs** for iconic songs to `riffTabs.ts` (practice riffs stay the default), plus `getTabColumns` and `getRiffPlayheadIndex` with tests.
+  2. Build `TrackCard`: artwork, title, artist, origin flag + country, style badge, release year, duration, and an explicit badge. It links to the detail page and has an `actions` slot for the Task 6 setlist toggle.
+  3. Build `FilterBar`: a controlled search input with a Reset filters button, the mood pills, Origin Country select (flag + name), Style/Subgenre select, Artist select, sort select, and a live summary ("Showing X of Y tracks · total duration"). Every control has a `<label>`.
+  4. Build `MoodCapsules` (signature ①): 4 toggle pills with `aria-pressed`; clicking the active pill clears it.
+  5. In `CatalogPage`, keep `filters: TrackFilters` (including `mood`) in `useState`, and derive the visible list with `useMemo(sortTracks(filterTracks(tracks, filters), filters.sort))`. Show an `empty` `StatusMessage` when nothing matches.
+  6. Add `EQ_PRESETS` and `bucketFrequencies` to `audioUtils.ts`, with tests.
+  7. Write the `useAmpConsole` hook. It creates the `AudioContext` lazily on the first play, then wires the source → lowshelf/peaking/highshelf filters → analyser → destination. Preset changes use `setTargetAtTime`, and the hook cleans up the animation frame and context on unmount.
+  8. Build `AudioPreviewPlayer` as the Amp Console (signature ②): `<audio crossOrigin="anonymous">`, play/pause and progress controls, a `<canvas>` frequency-bar visualizer, and 4 EQ preset buttons (`Flat`, `Metalcore Scoop`, `Classic Tube Amp`, `Bass Drop`). It replaces the placeholder player on `TrackDetailPage`.
+  9. Build `RiffTabPanel`: a monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty, labelled as a signature or practice riff, with a playhead column synced to the Amp Console's playback. Show it on `TrackDetailPage` next to the Amp Console, along with the origin flag/country and style in the track facts.
 - **Done when:** typing in the search box filters the cards live (including by style or country); the country, style, and artist filters, the mood pills, and every sort option work together; the results count updates; "no matches" shows the empty state; the detail page plays the preview with moving frequency bars; switching EQ presets mid-play changes the sound without restarting it; the riff tab panel shows a correctly aligned tab with tuning, BPM, and difficulty; and `npm test` passes.
 
 ---
 
-## Task 6 — Setlist with `localStorage` and the Festival Poster Builder
+## Task 6 — Setlist with `localStorage`, the Festival Poster Builder, and a global catalog
 
-- [x] **Goal:** Let users build a persistent setlist and turn it into a festival poster.
-- **Files:** `src/utils/setlistUtils.ts` (+ `setlistUtils.test.ts`), `src/types/track.ts`, `src/components/SetlistButton.tsx`, `src/components/FestivalPoster.tsx`, `src/pages/SetlistPage.tsx`, `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`, `src/App.tsx`, `src/App.css`
+- [x] **Goal:** Let users build a persistent setlist and turn it into a festival poster, and widen the catalog to a global spectrum of rock & metal without hitting Apple's rate limit.
+- **Files:** `src/utils/setlistUtils.ts` (+ test), `src/types/track.ts`, `src/types/riff.ts`, `src/components/SetlistButton.tsx`, `src/components/FestivalPoster.tsx`, `src/pages/SetlistPage.tsx`, `src/pages/CatalogPage.tsx`, `src/pages/TrackDetailPage.tsx`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/utils/trackUtils.ts` (+ test), `src/utils/catalogCache.ts` (+ test), `src/api/itunes.ts` (+ test), `src/App.tsx`, `src/App.css`
 - **Steps:**
   1. Add `setlistUtils.ts`, with unit tests: `toggleTrackInList`, `removeTrackFromList`, `reviveStoredTrack` / `parseStoredSetlist`, `getBrowserStorage` / `loadSetlist` / `saveSetlist`, `POSTER_THEMES`, `getHeadlinerCount`, and `buildFestivalLineup`. Also add the `PosterTheme`, `LineupAct`, and `FestivalLineup` types.
   2. In `App.tsx`, lazily load the setlist from `localStorage` (`rmv:setlist`), save it back in `useEffect`, and pass `isInSetlist`, toggle, remove, and clear handlers down as props. The `Navbar` badge shows `setlist.length`.
-  3. Build `SetlistButton` ("Add to Setlist" / "Remove from Setlist"; never triggers card navigation), and use it in the `TrackCard` `actions` slot and on `TrackDetailPage`. The detail page also falls back to the setlist when an id isn't in the catalog.
+  3. Build `SetlistButton` ("Add to Setlist" / "Remove from Setlist"; never triggers card navigation), and use it on every `TrackCard` and on `TrackDetailPage`. The detail page also falls back to the setlist when an id isn't in the catalog.
   4. Build `FestivalPoster` (signature ③): Headliners in large display type, the Main Stage underbill, origin flags + styles, and tracks/bands/runtime stats, themed via `data-theme`.
   5. Build `SetlistPage`: a poster theme switcher (`Foggy Woodland` / `Blood Moon` / `Vintage Tour`), the poster, the running order (durations, detail links, Remove buttons), a "Clear Lineup" button with confirmation, and an empty state linking back to `/`.
-- **Done when:** adding and removing from cards and the detail page updates the button and the Navbar badge immediately; the poster shows the correct Headliner/Main Stage split and runtime; switching themes restyles the poster instantly; the lineup survives a page reload; Remove and Clear update the poster; and `npm test` passes, including the new tests.
+  6. **Global catalog:** add ~60 international bands (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada) with their styles and Apple artist ids, plus 10 new countries and 14 new styles (with riff families for black metal and doom). Track `artistId`: enrichment matches by id first, then by accent-insensitive name, and rejects off-genre namesakes; curated bands are always kept, even under "World"/"Electronic" genres.
+  7. **Smarter fetching:** 3 searches + multi-artist Lookup requests, a 15 s timeout, partial-failure tolerance, a memory + storage cache, a shared in-flight batch (StrictMode fires once), and Retry bypassing the cache.
+- **Done when:** adding and removing from cards and the detail page updates the button and the Navbar badge immediately; the poster shows the correct Headliner/Main Stage split and runtime; switching themes restyles the poster instantly; the lineup survives a page reload; Remove and Clear update the poster; the live catalog shows 15+ countries (incl. Israel, Sweden, Finland, Norway) and 12+ styles with one network batch per session; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 
-## Catalog expansion (between Tasks 6 and 7) — Global bands, smarter fetching
+## Task 7 — Persistent player, remembered filters, and the Riff Arena
 
-- [x] **Goal:** A rich global spectrum of rock & metal countries, scenes, and styles, without hitting Apple's rate limit.
-- **Files:** `src/types/track.ts`, `src/types/riff.ts`, `src/utils/artistMetadata.ts`, `src/utils/riffTabs.ts`, `src/utils/trackUtils.ts`, `src/utils/setlistUtils.ts`, `src/utils/catalogCache.ts` (+ test), `src/api/itunes.ts` (+ test), `src/App.tsx`, `src/utils/trackUtils.test.ts`
+- [x] **Goal:** Fix the issues found while testing in the browser (filters reset, music stopping on navigation, slow loads), then add the interactive guessing game and track comparison with a clear game loop.
+- **Files:** `src/App.tsx`, `src/pages/CatalogPage.tsx`, `src/components/FilterBar.tsx`, `src/audio/playerEngine.ts`, `src/hooks/usePlayer.ts` (replaces `useAmpConsole.ts`), `src/components/AudioPreviewPlayer.tsx`, `src/components/MiniPlayer.tsx`, `src/pages/TrackDetailPage.tsx`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/audioUtils.ts`, `src/pages/ArenaPage.tsx`, `src/components/BlindTestGame.tsx`, `src/components/HeadToHead.tsx`, `src/components/TrackSelect.tsx`, `src/utils/arenaUtils.ts`, `src/types/track.ts`, `src/App.css`, `src/index.css` (+ tests)
 - **Steps:**
-  1. Add ~60 international bands (Israel, Sweden, Finland, Norway, Denmark, Iceland, France, Germany, Ukraine, Poland, the Netherlands, Switzerland, Greece, Brazil, Japan, Canada) with their styles and Apple artist ids, plus 10 new countries and 14 new styles (with riff families for black metal and doom).
-  2. Track `artistId`. Enrichment matches by id first, then by accent-insensitive name, and rejects off-genre namesakes. Curated bands are always kept, even under "World"/"Electronic" genres.
-  3. `fetchCatalog`: 3 searches + 1 multi-artist Lookup request, a 15 s timeout, partial-failure tolerance, memory + `sessionStorage` cache, shared in-flight batch (StrictMode fires once), and Retry bypassing the cache.
-- **Done when:** the live catalog shows 15+ countries (incl. Israel, Sweden, Finland, Norway) and 12+ styles in the `FilterBar`, with one network batch per session; and `npm test`, `npm run build`, and `npm run lint` pass.
-
----
-
-## UX fixes (between Tasks 6 and 7) — Remembered filters, persistent audio, faster loading
-
-- [x] **Goal:** Fix 3 issues found while testing in the browser.
-- **Files:** `src/App.tsx`, `src/pages/CatalogPage.tsx`, `src/components/FilterBar.tsx`, `src/audio/playerEngine.ts`, `src/hooks/usePlayer.ts` (replaces `useAmpConsole.ts`), `src/components/AudioPreviewPlayer.tsx`, `src/components/MiniPlayer.tsx`, `src/pages/TrackDetailPage.tsx`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/audioUtils.ts`, `src/App.css` (+ tests)
-- **Steps:**
-  1. Lift `TrackFilters` (incl. sort) from `CatalogPage` into `App`, so filters survive navigation.
-  2. Move playback into a module-level player engine (one `<audio>` + Web Audio graph, `useSyncExternalStore`). The Amp Console becomes a view onto it, and a `MiniPlayer` outside `<Routes>` keeps it controllable on other routes.
-  3. Progressive catalog rendering (`onProgress` after each request, `mergeCatalogTracks`), a 6 h `localStorage` cache read synchronously on the first render, and lookups split into 4 × ~16 ids (uncached: ~2 s instead of 5–12 s).
-- **Done when:** filters survive `/tracks/:id`, `/setlist`, `/arena`, and Back; a preview keeps playing across routes with the mini-bar, and returning to its page continues it; a new tab shows the cached catalog instantly with no requests; and `npm test`, `npm run build`, and `npm run lint` pass.
-
----
-
-## Task 7 — Riff Arena: Blind-Test Challenge and Head-to-Head
-
-- [x] **Goal:** Add the interactive guessing game and track comparison.
-- **Files:** `src/pages/ArenaPage.tsx`, `src/components/BlindTestGame.tsx`, `src/components/HeadToHead.tsx`, `src/components/TrackSelect.tsx`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts`, `src/types/track.ts`, `src/App.tsx`, `src/App.css`, `src/utils/trackUtils.test.ts`
-- **Steps:**
-  1. Add the `BlindTestRound`, `BlindTestScore`, and `ComparisonRow` types, and `arenaUtils.ts`: `shuffle` / `pickRandomTrack` (injectable RNG), `buildBlindTestRound` (realistic decoys, recent-answer exclusion), `getArtworkBlur`, `getGuessPoints` (speed scoring), `applyGuess`, best-streak `localStorage` helpers, and `compareTracks`, plus unit tests.
-  2. Add **concealed** playback to the player engine so Blind-Test rounds don't appear in the Now Playing bar.
-  3. Build `BlindTestGame` (signature ④): a concealed preview through `playerEngine`, artwork unblurring from 24px to 0px with the playback time, 4 option buttons (green/red feedback and a reveal), speed-based points, streak and persisted best streak, "Next Riff", and stopping on leave.
-  4. Build `HeadToHead` with two searchable `TrackSelect`s, contender cards (preview + setlist toggle), and a comparison table highlighting the longer track and the earlier release, plus tuning and tempo from the riff tab.
-  4. Handle the loading and error states (and a catalog with fewer than 4 distinct artists) with `StatusMessage`.
-- **Done when:** a round plays a hidden preview with progressively sharper artwork; answering shows green/red feedback and updates the score, streak, and saved best streak; leaving the arena stops the round; picking any two tracks updates the comparison immediately with correct highlights; and `npm test`, `npm run build`, and `npm run lint` pass.
-
----
-
-## Blind-Test set loop (between Tasks 7 and 8) — 5 rounds, 3 lives, Final Scoreboard
-
-- [x] **Goal:** Give the Riff Blind-Test a clear ending instead of endless rounds.
-- **Files:** `src/types/track.ts`, `src/utils/arenaUtils.ts`, `src/audio/playerEngine.ts` (`onTrackEnded`), `src/components/BlindTestGame.tsx`, `src/pages/ArenaPage.tsx`, `src/App.css`, `src/index.css`, `src/utils/trackUtils.test.ts`
-- **Steps:**
-  1. Replace the endless score model with `RoundResult[]` plus pure helpers: `summarizeSet`, `getSetStatus` (game-over evaluation), `getRankTitle`, and the all-time records helpers (`load` / `save` / `mergeArenaRecords`), with unit tests.
-  2. Make timeouts count: the player engine emits `onTrackEnded`, and an unanswered round whose concealed preview ends costs a life.
-  3. Show "Round X of 5" and the amp-tube lives; on the set's final result show "See Final Results", which stops the audio and opens the Final Scoreboard (banner, rank, score out of 5,000, accuracy, best streak, all-time records, recap with setlist buttons, and "Play New Set").
-- **Done when:** a 5-round set ends in "Set Complete!" and losing 3 lives ends in "Game Over — Amp Blown!" (both checked in headless Chrome, including a real timeout); records persist; and `npm test`, `npm run build`, and `npm run lint` pass.
+  1. **Remembered filters:** lift `TrackFilters` (incl. sort) from `CatalogPage` into `App`, so filters survive navigation.
+  2. **Persistent audio:** move playback into a module-level player engine (one `<audio>` + Web Audio graph, `useSyncExternalStore`). The Amp Console becomes a view onto it, and a `MiniPlayer` outside `<Routes>` keeps it controllable on other routes.
+  3. **Faster loading:** progressive catalog rendering (`onProgress` after each request, `mergeCatalogTracks`), a 6 h `localStorage` cache read synchronously on the first render, and lookups split into chunks of ~16 ids (uncached: ~2 s instead of 5–12 s).
+  4. **Arena logic:** add the `BlindTestRound`, `RoundResult`, and `ComparisonRow` types, and `arenaUtils.ts`: `shuffle` / `pickRandomTrack` (injectable RNG), `buildBlindTestRound` (realistic decoys, recent-answer exclusion), `getArtworkBlur`, `getGuessPoints` (speed scoring), records `localStorage` helpers, and `compareTracks`, plus unit tests.
+  5. Add **concealed** playback to the player engine so Blind-Test rounds don't appear in the Now Playing bar, and `onTrackEnded` so an unanswered round whose preview ends counts as a timeout.
+  6. Build `BlindTestGame` (signature ④): a concealed preview through `playerEngine`, artwork unblurring with the playback time, 4 option buttons (green/red feedback and a reveal), speed-based points, streaks, and stopping on leave. **Game loop:** 5 rounds with 3 amp-tube lives, a "See Final Results" button, and a Final Scoreboard (banner, rank, score, accuracy, best streak, all-time records, a recap with setlist buttons, and "Play New Set").
+  7. Build `HeadToHead` with two searchable `TrackSelect`s, contender cards (preview + setlist toggle), and a comparison table highlighting the longer track and the earlier release, plus tuning and tempo from the riff tab.
+  8. Handle the loading and error states (and a catalog with fewer than 4 distinct artists) with `StatusMessage`.
+- **Done when:** filters survive `/tracks/:id`, `/setlist`, `/arena`, and Back; a preview keeps playing across routes with the mini-bar, and returning to its page continues it; a new tab shows the cached catalog instantly with no requests; a round plays a hidden preview with progressively sharper artwork and green/red feedback; a 5-round set ends in "Set Complete!" and losing 3 lives ends in "Game Over — Amp Blown!" (checked in headless Chrome, including a real timeout); records persist; picking any two tracks updates the comparison with correct highlights; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 
@@ -163,14 +136,14 @@
 - **Files:** `src/index.css`, `src/App.css` (plain CSS only, no UI libraries)
 - **Steps:**
   1. Define theme tokens as CSS custom properties: near-black backgrounds, steel greys, a blood-red / amber accent, and a heavy display font for headings (Google Fonts or a system fallback).
-  2. Style the Navbar (sticky; active-link accent), the card grid (`auto-fill, minmax(...)` with hover lift), the FilterBar and mood pills, the detail layout (artwork beside info on desktop, stacked on mobile), the Amp Console panel, the three poster themes, the blind-test and Head-to-Head views, and the status messages.
+  2. Style the Navbar (sticky; active-link accent), the card grid (`auto-fill, minmax(...)` with hover lift), the FilterBar and mood pills, the detail layout (artwork beside info on desktop, stacked on mobile), the Amp Console panel, the three poster themes, the Blind-Test and Head-to-Head views, and the status messages.
   3. Add breakpoints for narrow screens (about 375px): a single column, a wrapping Navbar, full-width controls, and no horizontal scroll.
   4. Accessibility polish: `:focus-visible` outlines, sufficient contrast, and `prefers-reduced-motion`.
 - **Done when:** every page uses the consistent dark theme; every route (`/`, `/tracks/:id`, `/setlist` in all 3 themes, `/arena` mid-round and on the Final Scoreboard, and the 404) works at 375px, 768px, and 1280px in headless Chrome with `scrollWidth <= clientWidth` and no element outside the viewport; the mini-player never covers content; no UI library is in `package.json`; and `npm test`, `npm run build`, and `npm run lint` pass.
 
 ---
 
-## Task 9 — Final polish, README, and verification
+## Task 9 — Polish, README, and first full audit
 
 - [x] **Goal:** Ship-ready project.
 - **Files:** `README.md`, `public/favicon.svg`, `PRD.md`, `docs/architecture.md`, `tasks.md`; removed `src/assets/*` and `public/icons.svg`
@@ -182,12 +155,12 @@
      - the project structure, and links to `PRD.md`, `tasks.md`, `docs/architecture.md`, and `PROMPTS.md`.
   2. Remove leftover Vite template assets (`src/assets/hero.png`, `react.svg`, `vite.svg`, `public/icons.svg`) and replace the Vite favicon with a guitar-pick icon. Make sure there is no `any`, `console.*`, or `debugger` in `src`.
   3. Align `PRD.md` and `docs/architecture.md` with the shipped code (curated artist count, fixture size, request plan, UI labels "Retry" and "Clear Lineup", the test count, and documentation links).
-  4. Audit: `npm run build`, `npm run lint --max-warnings 0`, and `npm test`. Then walk every route and the main flows in headless Chrome (dev server with StrictMode, and the production build), recording console messages, exceptions, browser log entries, and failed requests.
+  4. Audit: `npm run build`, `npm run lint -- --max-warnings 0`, and `npm test`. Then walk every route and the main flows in headless Chrome (dev server with StrictMode, and the production build), recording console messages, exceptions, browser log entries, and failed requests.
 - **Done when:** build, lint, and the 114 tests pass with zero errors or warnings; there is no `any`; both browser runs report zero console, browser, or network issues across `/`, `/tracks/:id`, `/setlist`, `/arena`, the 404 page, and an unknown track id; and the README lets a new developer run the app and its tests from scratch.
 
 ---
 
-## Upgrade (after Task 9) — Studio-only catalog, playable lineup, heavier look, 6 poster themes
+## Task 10 — Studio-only catalog, playable lineup, heavier look, 6 poster themes
 
 - [x] **Goal:** Make the app feel heavier and more authentic: more iconic studio tracks, no live recordings, a playable festival lineup, and bolder visuals.
 - **Files:** `src/utils/trackUtils.ts`, `src/utils/artistMetadata.ts`, `src/utils/catalogCache.ts`, `src/api/itunes.ts`, `src/audio/playerEngine.ts`, `src/utils/audioUtils.ts`, `src/utils/setlistUtils.ts`, `src/types/track.ts`, `src/components/{MiniPlayer,AudioPreviewPlayer,LineupPlayback,AppleMusicLink}.tsx`, `src/pages/{SetlistPage,TrackDetailPage}.tsx`, `index.html`, `src/index.css`, `src/App.css` (+ tests)
@@ -200,7 +173,7 @@
 
 ---
 
-## Upgrade 2 — Fast catalog, clean albums, tournament, Playlist Builder, live stage
+## Task 11 — Fast catalog, clean albums, tournament, Playlist Builder, live stage
 
 - [x] **Goal:** Ten targeted improvements from hands-on browser testing: speed, data quality, deeper flagship bands, playback everywhere, and two bigger game/discovery features.
 - **Files:** `src/utils/{trackUtils,catalogCache,artistMetadata,arenaUtils,setlistUtils,audioUtils,builderUtils,streamingLinks}.ts`, `src/api/itunes.ts`, `src/types/track.ts`, `src/hooks/usePlayer.ts`, `src/components/{TrackCard,CardPlayButton,MiniPlayer,StreamingLinks,LineupPlayback,FestivalPoster,BlindTestGame,Navbar,StageBackdrop}.tsx` (removed `AppleMusicLink.tsx`), `src/pages/{CatalogPage,TrackDetailPage,SetlistPage,PlaylistBuilderPage}.tsx`, `src/App.tsx`, `src/index.css`, `src/App.css` (+ tests)
@@ -212,19 +185,21 @@
   5. **Mini-player EQ:** a preset `<select>` (Flat, Metalcore Scoop, Classic Tube Amp, Bass Drop); a compact pill on phones.
   6. **Streaming links:** Apple Music, Spotify and YouTube on the detail page, the running order and the Playlist Builder.
   7. **World tour poster:** acts show style only; a World Tour Dates & Venues section with 7 stops.
-  8. **Tournament:** 4 stages × 5 rounds (Easy ×1 → Medium ×1.5 → Hard ×2 → Elite ×2.5), with stage pools, heavier blur, closer decoys, a "Stage X Cleared!" transition that restores a life (max 3), and Conquered / Game Over endings.
-  9. **Playlist Builder:** `/builder` with a 5-question Sonic Diagnostic, a Metal Persona, a 10-track playlist (max 2 per band), preview / Play All / Swap / Add All 10 / Re-run, and a navbar link (2×2 on phones).
+  8. **Tournament:** the Blind-Test becomes 4 stages × 5 rounds (Easy ×1 → Medium ×1.5 → Hard ×2 → Elite ×2.5), with stage pools, heavier blur, closer decoys, a "Stage X Cleared!" transition that restores a life (max 3), and Conquered / Game Over endings.
+  9. **Playlist Builder** (signature ⑤): `/builder` with a 5-question Sonic Diagnostic, a Metal Persona, a 10-track playlist (max 2 per band), preview / Play All / Swap / Add All 10 / Re-run, and a navbar link (2×2 on phones).
   10. **Bolder stage:** diamond plate, crimson and amber light beams, a stage truss, lightning, embers, and translucent surfaces.
 - **Done when:** in headless Chrome the first render shows 48 cards and returning to `/` commits in under 16 ms (production build); no compilation albums and one cover per album appear; every deep-tier band has 20–25 tracks; the card play, mini EQ, streaming links, world tour, tournament progression (Stage 1 Cleared → Stage 2 at 22px/×1.5 → Game Over) and builder flow all work; every route has no overflow at 375px and a clean console; and `npm test` (171 tests), `npm run build` and `npm run lint` pass with zero `any`.
 
 ---
 
-## Catalog update — Limp Bizkit, Saliva, full *Sempiternal*
+## Task 12 — Catalog update and final rubric audit
 
-- [ ] **Goal:** Add two nu metal bands with their real studio hits, and give Bring Me The Horizon's *Sempiternal* full coverage.
-- **Files:** `src/utils/artistMetadata.ts`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/trackUtils.ts` (+ tests)
+- [x] **Goal:** Add two nu metal bands and full *Sempiternal* coverage, then audit the project against the course rubric before the live defense.
+- **Files:** `src/utils/artistMetadata.ts`, `src/api/itunes.ts`, `src/utils/catalogCache.ts`, `src/utils/trackUtils.ts`, `src/App.tsx`, `scripts/test-ui.mjs`, `package.json`, `src/test/fixtures/mockTracks.json` (moved from `src/data/`), `README.md`, `PRD.md`, `docs/architecture.md`, `tasks.md` (+ tests)
 - **Steps:**
   1. Add Limp Bizkit (US, Nu Metal, Apple id 105544, deep tier) and Saliva (US, Nu Metal, id 391630, headliner tier).
-  2. Add a featured lookup (1 request): the *Sempiternal* album (collection 598282638) and the exact studio track ids of 9 Limp Bizkit and 6 Saliva hits. Featured tracks are pinned past the per-band cap and win de-duplication and album artwork.
-  3. Allow Bring Me The Horizon 35 tracks (`SONG_CAP_OVERRIDES`), treat "Greatest Hitz" as a compilation, and bump the cache key to `rmv:catalog:v6`.
-- **Done when:** in headless Chrome, searching "Limp Bizkit", "Saliva" and "Sempiternal" shows every listed studio track (all 11 *Sempiternal* songs with one cover); and `npm test` (178 tests), `npm run build` and `npm run lint` pass with zero `any`.
+  2. Add a featured lookup (1 request): the *Sempiternal* album (collection 598282638) and the exact studio track ids of 9 Limp Bizkit and 6 Saliva hits. Featured tracks are pinned past the per-band cap and win de-duplication and album artwork. Allow Bring Me The Horizon 35 tracks (`SONG_CAP_OVERRIDES`), treat "Greatest Hitz" as a compilation, and bump the cache key to `rmv:catalog:v6`.
+  3. **`npm run test:ui`:** run `scripts/test-ui.mjs`, which starts the Vitest UI through Vitest's Node API and always opens the authenticated `?token=` URL (`vitest --ui --open` opens the bare URL after the first run, which shows "Vitest UI requires authentication" in a browser without the cookie).
+  4. **API purity:** move the sample records to `src/test/fixtures/mockTracks.json` (imported by tests only, never by the app), label the three screen states and the fetch-inside-`useEffect` in `App.tsx`, and state in the docs that 100% of catalog tracks come live from the iTunes Search and Lookup APIs.
+  5. **Rubric audit:** zero `any` / `@ts-ignore` / `@ts-expect-error` / `console.*`; at least 4 reusable components with typed props in `src/components/`; routes `/`, `/tracks/:id`, `/setlist`, `/arena`, `/builder`, `*`; `useParams`; `.map()` with `key={track.id}`; `NavLink`; and `README.md`, `PRD.md`, `tasks.md` and `docs/architecture.md` in sync, with a rubric map in the README.
+- **Done when:** in headless Chrome, searching "Limp Bizkit", "Saliva" and "Sempiternal" shows every listed studio track (all 11 *Sempiternal* songs with one cover); `npm run test:ui` opens the Vitest UI signed in, even in a fresh browser profile; no fixture data appears in the production bundle; the audit finds no violations; and `npm test` (178 tests), `npm run lint -- --max-warnings 0` and `npm run build` pass with zero errors, warnings, or `any`.

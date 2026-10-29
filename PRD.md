@@ -51,10 +51,11 @@ Supporting the features above are three **music-data enrichments**, which add da
 
 ## 4. Data Source
 
-**Apple iTunes Search API** — public, free, no API key, CORS-enabled.
+**Apple iTunes Search & Lookup API** — public, free, no API key, CORS-enabled. **100% of catalog tracks are fetched live** from these two endpoints; no track data is hardcoded in the app (a 10-record sample in `src/test/fixtures/mockTracks.json` is used by the unit tests only).
 
 ```
-https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
+https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=50
+https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
 ```
 
 - The catalog is built from **13 requests on a cold load**:
@@ -197,16 +198,17 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 15. **When I** reload the browser on `/setlist`, **I see** the same lineup. **When I** remove a track or confirm "Clear Lineup", **I see** the poster and runtime update immediately.
 16. **When I** start the Riff Blind-Test Tournament in `/arena`, **I see** stage 1 (Easy, ×1.0) with blurred artwork that gets sharper as the preview plays, and 4 answer buttons. **When I** pick one, **I see** green for the right answer (and red for my wrong pick), the points I earned, and the round counter, lives, score, and streak update. **When I** finish a stage's 5th round with a tube left, **I see** "Stage 1 Cleared!" with my lives carried over (+1, max 3) and an "Advance to Stage 2 →" button; stage 2 is Medium (×1.5) with heavier blur. **When I** lose my last tube or conquer stage 4, **I see** a final scoreboard with the stage reached, my rank, score out of 35,000, accuracy, records, and a recap of every round.
 17. **When I** pick two tracks in the Head-to-Head section, **I see** them side by side with origin, style, duration, release year, tuning, and tempo, with the longer track and the earlier release highlighted.
-18a. **When I** answer the 5 Sonic Diagnostic questions on `/builder`, **I see** a Metal Persona and a 10-track playlist with at most 2 songs per band. **When I** press ⇄ Swap on a row, **I see** only that row change; **When I** press "Add All 10 to Festival Setlist", **I see** the Navbar count go up by the number of new tracks.
-18b. **When I** press ▶ on a catalog card, **I see** it switch to ❚❚ and the mini-player show "Catalog 3 / N" with an EQ selector I can change.
-18c. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
-19. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
+18. **When I** answer the 5 Sonic Diagnostic questions on `/builder`, **I see** a Metal Persona and a 10-track playlist with at most 2 songs per band. **When I** press ⇄ Swap on a row, **I see** only that row change; **When I** press "Add All 10 to Festival Setlist", **I see** the Navbar count go up by the number of new tracks.
+19. **When I** press ▶ on a catalog card, **I see** it switch to ❚❚ and the mini-player show "Catalog 3 / N" with an EQ selector I can change.
+20. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
+21. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
+22. **When I** open the app for the first time with DevTools → Network open, **I see** the catalog requests go to `itunes.apple.com/search` and `itunes.apple.com/lookup`, and every card on screen comes from their responses.
 
 ## 7. Non-Functional Requirements
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
-- **Quality:** `npm run build`, `npm run lint`, and `npm test` all pass with zero errors.
-- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **129 tests in 5 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
+- **Quality:** `npm run build`, `npm run lint -- --max-warnings 0`, and `npm test` all pass with zero errors or warnings; `npm run test:ui` opens the Vitest UI in the browser.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **178 tests in 7 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 
@@ -216,7 +218,7 @@ https://itunes.apple.com/search?term=metalcore&media=music&entity=song&limit=60
 - Playing full tracks (previews only — 30 seconds, provided by Apple).
 - Syncing the setlist across devices (`localStorage` only).
 - Third-party UI, audio, or state-management libraries.
-- Features beyond the four signature features and three enrichments (e.g. stats dashboards, random-track rollers, playlists export).
+- Features beyond the five signature features and three enrichments (e.g. stats dashboards, random-track rollers, playlists export).
 - Full or exhaustive transcriptions: only a few short, simplified signature opening riffs are tabbed; everything else uses a style-based practice riff.
 
 ## 9. Further Reading

@@ -18,11 +18,12 @@ src/
 │   ├── riff.ts               # Guitar Riff Tab types
 │   └── audio.ts              # EQ preset types
 │
-├── data/
-│   └── mockTracks.json       # 10 real iTunes records (raw shape) — the deterministic test fixture
+├── test/
+│   └── fixtures/
+│       └── mockTracks.json   # 10 real iTunes records (raw shape) — test fixture, imported by *.test.ts only
 │
 ├── api/
-│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 9 tiered lookups,
+│   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 10 lookups,
 │   │                         #   progressive merge, memory + localStorage cache
 │   └── itunes.test.ts        # request-plan tests (no network)
 │
@@ -76,6 +77,10 @@ src/
     ├── ArenaPage.tsx         # /arena
     ├── PlaylistBuilderPage.tsx # /builder — Signature 5
     └── NotFoundPage.tsx      # *
+
+scripts/
+├── test-ui.mjs               # npm run test:ui — starts the Vitest UI and opens its ?token= URL
+└── log-prompt.mjs            # Agent hook: appends each prompt to PROMPTS.md
 ```
 
 ## 2. Component Hierarchy
@@ -458,7 +463,9 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ### Catalog fetch — `useEffect` in `App` + `fetchCatalog()`
 
-- `App` calls `fetchCatalog({ signal, forceRefresh: requestId > 0 })` inside `useEffect`.
+- **Data source:** 100% of the catalog is fetched live from Apple's public, keyless iTunes API — `https://itunes.apple.com/search` and `https://itunes.apple.com/lookup`. No track data is hardcoded in the app; the sample records in `src/test/fixtures/mockTracks.json` are imported by the unit tests only (none of them are in the production bundle). `artistMetadata.ts` holds band facts (origin, style, Apple artist ids) and the ids of a few featured releases to request, never track data.
+- `App` calls `fetchCatalog({ signal, forceRefresh: requestId > 0, onProgress })` inside `useEffect` ([`src/App.tsx`](../src/App.tsx), labelled "fetch inside useEffect"); `requestSongs` in `src/api/itunes.ts` makes the actual `fetch()` call for each request.
+- **Three screen states** (`FetchStatus = 'loading' | 'error' | 'success'`), labelled in `App.tsx` as states 1–3: `'loading'` on a cold start and on Retry → `'success'` as soon as the first response lands (and again when the batch completes) → or `'error'` with the message and a Retry button. Every data page renders them with `StatusMessage` (spinner / error + Retry / empty), and the data itself on `'success'`. A catalog the API returned earlier (cached for 6 h) starts directly in `'success'`.
 - **Request plan (13 requests on a cold load, 0 when cached):** 3 searches (`rock`, `metal`, `metalcore`, 50 songs each), one featured lookup, plus three tiers of **Lookup API** calls (Apple applies `limit` per artist), set in `LOOKUP_TIERS` and chosen per band by `getCatalogTier`:
   - **Deep tier:** `DEEP_CATALOG_ARTIST_IDS`, the 22 flagship bands in `DEEP_CATALOG_ARTISTS` (Meshuggah, Slipknot, Metallica, Nirvana, Rammstein, Limp Bizkit…). Top **50** songs each, chunked at 8 ids, giving 3 lookups (~4–5 s each). About half of those are live, compilation or duplicate versions, so after filtering and the per-band cap each band keeps 20–25 studio songs.
   - **Headliner tier:** `HEADLINER_ARTIST_IDS`, the 17 other bands in `HEADLINER_ARTISTS`. Top 10 songs each, chunked at 12 ids, giving 2 lookups.
@@ -589,7 +596,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **129 tests in 5 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **178 tests in 7 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 
@@ -698,7 +705,9 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `getMetalPersona` | `({ mood, tempo }) => MetalPersona` | 12 persona titles + taglines, with a fallback | ✅ builder |
 | `bucketFrequencies` | `(data: ArrayLike<number>, bars: number, usableFraction = 0.75) => number[]` | Averages the lower 75% of FFT bins into `bars` values normalized to 0–1 | ✅ Task 5 |
 
-**Test fixtures:** `src/data/mockTracks.json` (10 real iTunes records from US, UK, and Australian bands) uses the raw iTunes response shape, and tests load it through `parseSearchResults`, the same validation the live API uses. It feeds the static list in Tasks 1–2 and is reused as the test fixture after the switch to the real API in Task 3. The tests never hit the network.
+**Test fixtures:** `src/test/fixtures/mockTracks.json` (10 real iTunes records from US, UK, and Australian bands) uses the raw iTunes response shape, and tests load it through `parseSearchResults`, the same validation the live API uses. It fed the static list in Tasks 1–2; since Task 3 only the `*.test.ts` files import it (moved out of `src/data/` in Task 12 to make that obvious). The tests never hit the network.
+
+**Running the tests:** `npm test` runs `vitest run` once. `npm run test:ui` runs `scripts/test-ui.mjs`, which starts Vitest in watch mode with the **@vitest/ui** dashboard through Vitest's Node API (`startVitest`) and opens the UI's `?token=` URL. Vitest 5 guards its UI with a token: the token URL sets an auth cookie and redirects to the clean URL. Plain `vitest --ui --open` only opens the token URL on the first run on a machine, so later runs in a browser without the cookie hit "Vitest UI requires authentication"; the script avoids that. `BROWSER=none` only prints the URL.
 
 ## 7. Routing
 

@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:ui": "vitest --ui"
+    "test:ui": "node scripts/test-ui.mjs"
   },
   "dependencies": {
     "react": "^19.2.8",

@@ -95,9 +95,11 @@ npm run lint
 # Run all unit tests once, headless (CI-style)
 npm test
 
-# Open the interactive Vitest UI dashboard in your browser
+# Open the interactive Vitest UI dashboard in your browser (already signed in)
 npm run test:ui
 ```
+
+`npm run test:ui` runs [`scripts/test-ui.mjs`](scripts/test-ui.mjs). It starts the tests in watch mode with **@vitest/ui** and opens the UI's `?token=` URL, so the browser is authenticated straight away. Vitest 5 protects its UI with a token, and plain `vitest --ui --open` reopens the bare URL after the first run, which shows "Vitest UI requires authentication" in a browser that doesn't have the cookie yet. Set `BROWSER=none` to only print the URL.
 
 There are **178 unit tests in 7 files**. They cover the app's pure logic and never touch the network:
 
@@ -111,9 +113,11 @@ There are **178 unit tests in 7 files**. They cover the app's pure logic and nev
 | `src/utils/audioUtils.test.ts` | EQ presets, visualizer frequency bucketing, mini-player visibility, and lineup queue navigation (⏮ / ⏭ / auto-advance) |
 | `src/api/itunes.test.ts` | The request plan (deep, headliner and spotlight tiers; stays under Apple's rate limit) |
 
-The tests use `src/data/mockTracks.json` as a fixture: 10 real iTunes records, loaded through the same validation as live data.
+The tests use `src/test/fixtures/mockTracks.json` as a fixture: 10 real iTunes records, loaded through the same validation as live data. **Only the test files import it**; the app never does, and none of its data is in the production bundle.
 
 ## API & data architecture
+
+**100% of the catalog is fetched live** from Apple's public, keyless iTunes API: [`https://itunes.apple.com/search`](https://itunes.apple.com/search?term=metal&media=music&entity=song&limit=5) and `https://itunes.apple.com/lookup`. No track data is hardcoded in the app. The curated artist map (`src/utils/artistMetadata.ts`) only stores band facts (origin country, style, Apple artist ids) and the ids of a few releases to fetch; every title, album, cover, preview and duration comes from the API.
 
 ### Endpoints (public, no API key)
 
@@ -172,16 +176,35 @@ src/
 │                            # PlaylistBuilderPage, NotFoundPage
 ├── types/                   # track.ts, riff.ts, audio.ts (strict types, no `any`)
 ├── utils/                   # Pure, unit-tested logic (+ *.test.ts)
-├── data/mockTracks.json     # Test fixture
+├── test/fixtures/           # mockTracks.json: 10 sample iTunes records, imported by tests only
 ├── App.tsx                  # Routes + shared state (catalog, filters, setlist)
 ├── index.css                # Design tokens & base styles
 └── App.css                  # Component styles
+scripts/
+├── test-ui.mjs              # npm run test:ui: Vitest UI, opened with its auth token
+└── log-prompt.mjs           # Logs each prompt to PROMPTS.md (agent hook)
 ```
+
+## Rubric map (where to look)
+
+| Requirement | Where |
+| --- | --- |
+| `fetch` inside `useEffect` | [`src/App.tsx:42-77`](src/App.tsx#L42-L77) calls `fetchCatalog()`, whose `fetch()` is at [`src/api/itunes.ts:104`](src/api/itunes.ts#L104); `AbortController` cleanup and a Retry counter |
+| 3 screen states: loading / error / has data | `FetchStatus = 'loading' \| 'error' \| 'success'` ([`src/types/track.ts:160`](src/types/track.ts#L160)), set in [`src/App.tsx`](src/App.tsx#L32) and rendered with `StatusMessage` in [`src/pages/CatalogPage.tsx:115-137`](src/pages/CatalogPage.tsx#L115-L137) (also Detail, Arena, Builder) |
+| Data from the API, not pasted | Every track comes from `itunes.apple.com/search` and `/lookup`; the sample JSON lives in `src/test/fixtures/` and is imported by tests only |
+| React Router | `<BrowserRouter>` + routes `/`, `/tracks/:id`, `/setlist`, `/arena`, `/builder`, `*` in [`src/App.tsx:107-184`](src/App.tsx#L107-L184) |
+| `useParams` | [`src/pages/TrackDetailPage.tsx:35`](src/pages/TrackDetailPage.tsx#L35) |
+| `NavLink` with active style | [`src/components/Navbar.tsx`](src/components/Navbar.tsx#L17) |
+| `.map()` with a unique `key` | [`src/pages/CatalogPage.tsx:164-165`](src/pages/CatalogPage.tsx#L164-L165) (`key={track.id}`), and every other list |
+| ≥ 4 reusable components with typed props | 17 files in [`src/components/`](src/components/), e.g. `Navbar`, `TrackCard`, `FilterBar`, `StatusMessage`, `AudioPreviewPlayer`, each exporting a `…Props` interface |
+| TypeScript, zero `any` | Strict mode; no `any`, `@ts-ignore`, `@ts-expect-error` or `console.*` in `src` |
+| Unit tests (Vitest + UI) | 178 tests in 7 `*.test.ts` files; `npm test` and `npm run test:ui` |
+| Docs | [PRD.md](PRD.md) ("When I…, I see…"), [tasks.md](tasks.md) (12 tasks), [docs/architecture.md](docs/architecture.md), [PROMPTS.md](PROMPTS.md) |
 
 ## Project documentation
 
 - **[PRD.md](PRD.md):** product requirements, pages, and acceptance criteria ("When I…, I see…").
-- **[tasks.md](tasks.md):** the step-by-step build plan, one task at a time.
+- **[tasks.md](tasks.md):** the build plan: 12 tasks in build order, each with a `Done when:` line.
 - **[docs/architecture.md](docs/architecture.md):** component hierarchy, TypeScript types, state management, the player and fetch design, and a table of every tested utility.
 - **[PROMPTS.md](PROMPTS.md):** the log of prompts used to build the project with the AI agent.
 - **[AGENTS.md](AGENTS.md):** the working rules the agent followed.

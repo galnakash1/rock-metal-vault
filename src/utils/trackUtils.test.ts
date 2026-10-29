@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import mockData from '../data/mockTracks.json'
+import mockData from '../test/fixtures/mockTracks.json'
 import {
   FINAL_STAGE,
   LIVES_PER_RUN,

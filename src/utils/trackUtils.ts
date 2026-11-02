@@ -1,4 +1,5 @@
 import type {
+  FetchStatus,
   ITunesExplicitness,
   ITunesTrackRaw,
   MoodCapsule,
@@ -372,4 +373,46 @@ export function getUniqueSubgenres(tracks: Track[]): Subgenre[] {
 /** Sorted, de-duplicated artist names for the artist filter. */
 export function getUniqueArtists(tracks: Track[]): string[] {
   return uniqueSorted(tracks.map((track) => track.artist))
+}
+
+// ---------- Track detail lookup ----------
+
+/** What `/tracks/:id` shows: the track, or one of the loading / error / not-found states. */
+export type TrackDetailState =
+  | { kind: 'found'; track: Track }
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'not-found' }
+
+export interface TrackDetailSources {
+  tracks: readonly Track[] // the catalog loaded so far
+  setlist: readonly Track[] // saved tracks (full objects from localStorage)
+  status: FetchStatus
+  isCatalogComplete: boolean // false while later batch responses are still merging in
+}
+
+/**
+ * Resolves the `:id` route param to what the detail page should show:
+ * - a found track (catalog first, then the saved setlist, so saved tracks open while loading or offline);
+ * - `loading` while the catalog loads — and, for a valid id, while later batches are still arriving,
+ *   since the track may be in one of them;
+ * - `error` when the catalog failed to load;
+ * - `not-found` once loading has settled (or for an invalid id that isn't loading).
+ * Only plain digit strings are valid iTunes track ids ("12abc", "-1", "" are not).
+ */
+export function resolveTrackDetail(
+  id: string | undefined,
+  { tracks, setlist, status, isCatalogComplete }: TrackDetailSources,
+): TrackDetailState {
+  const trackId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
+  const track =
+    trackId === null
+      ? undefined
+      : (tracks.find((item) => item.id === trackId) ?? setlist.find((item) => item.id === trackId))
+
+  if (track) return { kind: 'found', track }
+  if (status === 'loading') return { kind: 'loading' }
+  if (status === 'error') return { kind: 'error' }
+  if (trackId !== null && !isCatalogComplete) return { kind: 'loading' }
+  return { kind: 'not-found' }
 }

@@ -494,7 +494,13 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ### Track detail lookup
 
-`TrackDetailPage` parses `id` from `useParams` and looks it up in the catalog first, then in the setlist. A track found in either place renders immediately, even while the catalog is loading or after a fetch error. Otherwise it shows `StatusMessage` (loading / error with Retry), and if the id isn't numeric or isn't found, the "Track not found" state.
+`TrackDetailPage` reads `id` with `useParams` and receives `tracks`, `status`, `error`, `setlist` and `isCatalogComplete` from `App` (`false` while later batch responses are still merging in). The decision is the pure, unit-tested `resolveTrackDetail(id, { tracks, setlist, status, isCatalogComplete })` in `trackUtils.ts`, which returns `{ kind: 'found', track }`, `'loading'`, `'error'` or `'not-found'`. A valid id is a plain digit string (`"12abc"`, `"-1"` and `""` are invalid). The checks run in this order:
+
+1. **Found:** the track is in the catalog loaded so far, or else in the saved setlist (full `Track` objects from `localStorage`). It renders immediately, even while the catalog is loading or after a fetch error.
+2. **Loading:** `status` is `'loading'`, for any id.
+3. **Error:** `status` is `'error'` (`StatusMessage` with the message and Retry).
+4. **Loading:** the id is valid but `isCatalogComplete` is `false`, because the track may be in a batch that hasn't arrived yet.
+5. **Not found:** everything else, i.e. the catalog has settled and the track is still missing, or the id is invalid once the initial load is over. With a cached catalog `isCatalogComplete` starts `true`, so an unknown id shows "Track not found" right away.
 
 ## 5. Signature Feature Design
 

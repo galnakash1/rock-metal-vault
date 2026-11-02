@@ -133,6 +133,7 @@ function App() {
                 status={status}
                 error={error}
                 onRetry={handleRetry}
+                isCatalogComplete={isCatalogComplete}
                 setlist={setlist}
                 isInSetlist={isInSetlist}
                 onToggleSetlist={toggleSetlistTrack}

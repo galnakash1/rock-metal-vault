@@ -515,3 +515,38 @@ Verified that Limp Bizkit (25 tracks), Saliva (9 tracks), and all 11 tracks from
 > Stop when done and provide a clear summary of what was updated and verified.
 > </pasted_content id="5dbb">
 Completed final pre-defense rubric audit: consolidated tasks.md into 12 numbered tasks, moved mockTracks.json to src/test/fixtures/, added automatic token launcher for npm run test:ui, and verified all 178 unit tests, build, and lint checks pass with zero warnings.
+## 2026-11-02
+
+**18:13 · claude**
+
+> <pasted_content id="5dbb">
+> Please perform one narrowly scoped reliability fix in Rock & Metal Vault.
+> 
+> Issue:
+> TrackDetailPage can display "Track not found" while the catalog is still loading progressively. App.tsx already tracks isCatalogComplete, but TrackDetailPage does not receive that information.
+> 
+> Requirements:
+> 1. Pass isCatalogComplete from App.tsx to TrackDetailPage through a properly typed prop.
+> 2. When a valid track ID is not yet available and catalog loading is still in progress, display the existing loading UI instead of "Track not found".
+> 3. Display "Track not found" only after catalog loading has settled and the track is still unavailable.
+> 4. Preserve the existing localStorage setlist fallback, error handling, Retry behavior, and invalid-ID handling.
+> 5. Add appropriate tests for the decision logic, including a valid track that arrives in a later API batch.
+> 6. Preserve the existing project structure, visual design, API architecture, and all current features.
+> 7. Run npm test, npm run build, and npm run lint -- --max-warnings 0. Report the actual results.
+> 
+> Do not introduce unnecessary refactoring, new dependencies, or unrelated changes.
+> 
+> Follow CLAUDE.md and AGENTS.md. Do not run git commit yourself. Stop after this single task and summarize the exact files changed and why.
+> </pasted_content id="5dbb">
+
+**18:18 · claude**
+
+> <pasted_content id="5dbb">
+> Please update only the "Track detail lookup" section in docs/architecture.md to accurately document the new isCatalogComplete behavior and the resolveTrackDetail() utility.
+> 
+> Explain when the page shows loading, error, not found, or a track from the catalog or saved setlist.
+> 
+> Keep the documentation concise and consistent with the actual implementation.
+> 
+> Do not modify any application code, tests, or unrelated documentation. Do not run git commit.
+> </pasted_content id="5dbb">

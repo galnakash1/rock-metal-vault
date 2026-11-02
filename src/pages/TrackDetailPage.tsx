@@ -9,13 +9,15 @@ import { usePlayer } from '../hooks/usePlayer'
 import type { GuitarRiffTab } from '../types/riff'
 import type { FetchStatus, Track } from '../types/track'
 import { getRiffPlayheadIndex, getTrackRiffTab } from '../utils/riffTabs'
-import { formatDuration } from '../utils/trackUtils'
+import { formatDuration, resolveTrackDetail } from '../utils/trackUtils'
 
 export interface TrackDetailPageProps {
   tracks: Track[]
   status: FetchStatus
   error: string | null
   onRetry: () => void
+  /** False while later catalog batches are still arriving (progressive loading). */
+  isCatalogComplete: boolean
   setlist: Track[]
   isInSetlist: (trackId: number) => boolean
   onToggleSetlist: (track: Track) => void
@@ -28,20 +30,18 @@ function TrackDetailPage({
   status,
   error,
   onRetry,
+  isCatalogComplete,
   setlist,
   isInSetlist,
   onToggleSetlist,
 }: TrackDetailPageProps) {
   const { id } = useParams<{ id: string }>()
-  // Only plain digit strings are valid iTunes track ids ("12abc", "-1", "" are not).
-  const trackId = id !== undefined && /^\d+$/.test(id) ? Number(id) : null
-  // Saved tracks are full Track objects, so they open even while the catalog is loading or offline.
-  const track =
-    trackId === null
-      ? undefined
-      : (tracks.find((item) => item.id === trackId) ?? setlist.find((item) => item.id === trackId))
+  // Saved tracks are full Track objects, so they open even while the catalog is loading or offline;
+  // a valid id stays "loading" until every catalog batch has arrived.
+  const detail = resolveTrackDetail(id, { tracks, setlist, status, isCatalogComplete })
 
-  if (track) {
+  if (detail.kind === 'found') {
+    const { track } = detail
     // Keyed by id so per-track view state resets; playback itself lives in the global player.
     return (
       <TrackDetailView
@@ -53,11 +53,11 @@ function TrackDetailPage({
     )
   }
 
-  if (status === 'loading') {
+  if (detail.kind === 'loading') {
     return <StatusMessage variant="loading" message="Pulling this track from the Vault…" />
   }
 
-  if (status === 'error') {
+  if (detail.kind === 'error') {
     return (
       <StatusMessage
         variant="error"

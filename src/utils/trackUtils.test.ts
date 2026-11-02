@@ -65,8 +65,10 @@ import {
   normalizeTrack,
   normalizeTracks,
   parseSearchResults,
+  resolveTrackDetail,
   sortTracks,
   upgradeArtworkUrl,
+  type TrackDetailSources,
 } from './trackUtils'
 
 // ---------- Fixtures ----------
@@ -1238,5 +1240,65 @@ describe('compareTracks (Head-to-Head metrics)', () => {
       'tie',
     ])
     expect(row('Released', track, makeTrack({ releaseYear: null }))?.winner).toBe('none')
+  })
+})
+
+// ---------- Track detail lookup ----------
+
+describe('resolveTrackDetail (/tracks/:id while the catalog loads progressively)', () => {
+  const paranoid = byTitle('Paranoid')
+  const throne = byTitle('Throne')
+  const firstBatch = tracks.filter((track) => track.id !== throne.id)
+  const settled: TrackDetailSources = { tracks, setlist: [], status: 'success', isCatalogComplete: true }
+
+  it('shows a valid track that only arrives in a later batch: loading first, never "not found"', () => {
+    const id = String(throne.id)
+    // App's states during a cold load: loading → first batch merged (incomplete) → all batches in.
+    expect(resolveTrackDetail(id, { ...settled, tracks: [], status: 'loading', isCatalogComplete: false })).toEqual({
+      kind: 'loading',
+    })
+    expect(resolveTrackDetail(id, { ...settled, tracks: firstBatch, isCatalogComplete: false })).toEqual({
+      kind: 'loading',
+    })
+    expect(resolveTrackDetail(id, settled)).toEqual({ kind: 'found', track: throne })
+  })
+
+  it('shows "not found" only once loading has settled and the track is still missing', () => {
+    const missing = { ...settled, tracks: firstBatch }
+    expect(resolveTrackDetail('999', { ...missing, isCatalogComplete: false })).toEqual({ kind: 'loading' })
+    expect(resolveTrackDetail('999', missing)).toEqual({ kind: 'not-found' })
+  })
+
+  it('opens a track as soon as it is in the catalog, even mid-load', () => {
+    expect(resolveTrackDetail(String(paranoid.id), { ...settled, tracks: firstBatch, isCatalogComplete: false })).toEqual(
+      { kind: 'found', track: paranoid },
+    )
+  })
+
+  it('falls back to the saved setlist while loading, offline, or when the API no longer has the track', () => {
+    const saved = { setlist: [throne], tracks: [] }
+    expect(resolveTrackDetail(String(throne.id), { ...settled, ...saved, status: 'loading', isCatalogComplete: false })).toEqual(
+      { kind: 'found', track: throne },
+    )
+    expect(resolveTrackDetail(String(throne.id), { ...settled, ...saved, status: 'error', isCatalogComplete: false })).toEqual(
+      { kind: 'found', track: throne },
+    )
+    expect(resolveTrackDetail(String(throne.id), { ...settled, ...saved })).toEqual({ kind: 'found', track: throne })
+  })
+
+  it('reports a failed load as an error (Retry), not as "not found"', () => {
+    expect(resolveTrackDetail('999', { ...settled, tracks: [], status: 'error', isCatalogComplete: false })).toEqual({
+      kind: 'error',
+    })
+  })
+
+  it('keeps invalid ids as before: loading while the catalog loads, otherwise "not found" (never stuck mid-batch)', () => {
+    const midBatch = { ...settled, tracks: firstBatch, isCatalogComplete: false }
+    for (const id of [undefined, '', '12abc', '-1', '1.5']) {
+      expect(resolveTrackDetail(id, { ...settled, status: 'loading', isCatalogComplete: false })).toEqual({ kind: 'loading' })
+      expect(resolveTrackDetail(id, midBatch)).toEqual({ kind: 'not-found' })
+      expect(resolveTrackDetail(id, settled)).toEqual({ kind: 'not-found' })
+      expect(resolveTrackDetail(id, { ...settled, status: 'error' })).toEqual({ kind: 'error' })
+    }
   })
 })

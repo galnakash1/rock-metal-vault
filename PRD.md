@@ -45,7 +45,7 @@ Supporting the features above are three **music-data enrichments**, which add da
 | Routing | `react-router-dom` (client-side routing) |
 | Data | Apple iTunes Search API, called with `fetch` inside `useEffect` |
 | Audio | HTML5 `<audio>` + Web Audio API (`BiquadFilterNode` EQ, `AnalyserNode` visualizer) |
-| Persistence | Browser `localStorage` (setlist only) |
+| Persistence | Browser `localStorage` (setlist, completed catalog cache, and Arena records) |
 | Styling | Plain CSS — custom dark Rock/Metal theme, responsive, **no UI libraries** |
 | Testing | Vitest + `@vitest/ui` (unit tests for utility functions) |
 
@@ -208,7 +208,7 @@ https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint -- --max-warnings 0`, and `npm test` all pass with zero errors or warnings; `npm run test:ui` opens the Vitest UI in the browser.
-- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **178 tests in 7 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **189 tests in 7 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 

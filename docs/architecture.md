@@ -25,7 +25,7 @@ src/
 ├── api/
 │   ├── itunes.ts             # fetchCatalog({ signal, forceRefresh, onProgress }): 3 searches + 10 lookups,
 │   │                         #   progressive merge, memory + localStorage cache
-│   └── itunes.test.ts        # request-plan tests (no network)
+│   └── itunes.test.ts        # request-plan tests + fetchCatalog caching with a mocked API (no network)
 │
 ├── audio/
 │   └── playerEngine.ts       # App-wide preview player: one <audio> + Web Audio graph + store
@@ -105,8 +105,9 @@ scripts/
     │   │                   │     └── <SetlistButton />
     │   │                   └── IntersectionObserver sentinel + "Show More Tracks"
     │   │
-    │   ├── "/tracks/:id"  <TrackDetailPage tracks status setlist isInSetlist onToggleSetlist>
-    │   │                   ├── <StatusMessage />   (loading / not found)
+    │   ├── "/tracks/:id"  <TrackDetailPage tracks status error onRetry isCatalogComplete
+    │   │                                   setlist isInSetlist onToggleSetlist>
+    │   │                   ├── <StatusMessage />   (loading / error / not found, via resolveTrackDetail)
     │   │                   └── <TrackDetailView key={track.id}>
     │   │                         ├── <SetlistButton />
     │   │                         ├── <AudioPreviewPlayer track />   (Amp Console → global player)
@@ -602,7 +603,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **178 tests in 7 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, and `api/itunes` request-plan tests); the label says which task added the tests. The tests never touch the network.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **189 tests in 7 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, and `api/itunes`: the request plan, plus `fetchCatalog` partial-failure and caching behavior against a mocked `fetch` and `localStorage`); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 

@@ -101,7 +101,7 @@ npm run test:ui
 
 `npm run test:ui` runs [`scripts/test-ui.mjs`](scripts/test-ui.mjs). It starts the tests in watch mode with **@vitest/ui** and opens the UI's `?token=` URL, so the browser is authenticated straight away. Vitest 5 protects its UI with a token, and plain `vitest --ui --open` reopens the bare URL after the first run, which shows "Vitest UI requires authentication" in a browser that doesn't have the cookie yet. Set `BROWSER=none` to only print the URL.
 
-There are **178 unit tests in 7 files**. They cover the app's pure logic and never touch the network:
+There are **189 unit tests in 7 files**. They cover the app's pure logic and never touch the network:
 
 | Test file | Covers |
 | --- | --- |
@@ -111,7 +111,7 @@ There are **178 unit tests in 7 files**. They cover the app's pure logic and nev
 | `src/utils/streamingLinks.test.ts` | Apple Music / Spotify / YouTube links and search queries |
 | `src/utils/catalogCache.test.ts` | The catalog cache TTL and validation, the progressive merge, song-level de-duplication (the original release wins), the 25-songs-per-band cap, and canonical album artwork |
 | `src/utils/audioUtils.test.ts` | EQ presets, visualizer frequency bucketing, mini-player visibility, and lineup queue navigation (⏮ / ⏭ / auto-advance) |
-| `src/api/itunes.test.ts` | The request plan (deep, headliner and spotlight tiers; stays under Apple's rate limit) |
+| `src/api/itunes.test.ts` | The request plan (deep, headliner and spotlight tiers; stays under Apple's rate limit), and `fetchCatalog` caching against a mocked API: a fully successful batch is cached, a partially failed batch still returns its tracks but isn't cached (the next load fetches again), and a completely failed batch rejects |
 
 The tests use `src/test/fixtures/mockTracks.json` as a fixture: 10 real iTunes records, loaded through the same validation as live data. **Only the test files import it**; the app never does, and none of its data is in the production bundle.
 
@@ -198,7 +198,7 @@ scripts/
 | `.map()` with a unique `key` | [`src/pages/CatalogPage.tsx:164-165`](src/pages/CatalogPage.tsx#L164-L165) (`key={track.id}`), and every other list |
 | ≥ 4 reusable components with typed props | 17 files in [`src/components/`](src/components/), e.g. `Navbar`, `TrackCard`, `FilterBar`, `StatusMessage`, `AudioPreviewPlayer`, each exporting a `…Props` interface |
 | TypeScript, zero `any` | Strict mode; no `any`, `@ts-ignore`, `@ts-expect-error` or `console.*` in `src` |
-| Unit tests (Vitest + UI) | 178 tests in 7 `*.test.ts` files; `npm test` and `npm run test:ui` |
+| Unit tests (Vitest + UI) | 189 tests in 7 `*.test.ts` files; `npm test` and `npm run test:ui` |
 | Docs | [PRD.md](PRD.md) ("When I…, I see…"), [tasks.md](tasks.md) (12 tasks), [docs/architecture.md](docs/architecture.md), [PROMPTS.md](PROMPTS.md) |
 
 ## Project documentation

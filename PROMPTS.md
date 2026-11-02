@@ -556,3 +556,47 @@ Completed final pre-defense rubric audit: consolidated tasks.md into 12 numbered
 - Confirmed that the production build succeeds.
 - Confirmed that ESLint reports no errors or warnings.
 - Committed and pushed the changes to GitHub.
+**18:25 · claude**
+
+> <pasted_content id="5dbb">
+> Please perform a narrowly scoped reliability fix for partial iTunes API failures in Rock & Metal Vault.
+> 
+> CONTEXT:
+> In src/api/itunes.ts, startBatch() uses Promise.allSettled() to tolerate individual request failures. This is intentional and should be preserved. However, when some requests fail but at least one succeeds, current.tracks is assigned to memoryCache even though the catalog is incomplete. Persistent caching already correctly avoids storing partial results.
+> 
+> TASK:
+> 1. Inspect the current implementation of startBatch(), getCachedCatalog(), fetchCatalog(), and the relevant cache utilities.
+> 2. Ensure a catalog is stored as a reusable complete cache (in memory or localStorage) only when all requests in the batch succeed.
+> 3. When some requests fail but usable tracks were returned, keep returning and displaying those tracks for the current request, preserving progressive rendering. However, subsequent independent catalog requests must not treat that partial result as a complete cache.
+> 4. Preserve the existing behavior when every request fails: return an error so the UI can offer Retry.
+> 5. Preserve the existing cache TTL, request sharing, AbortController behavior, forceRefresh, deduplication, loading states, and all other application features.
+> 6. Add meaningful Vitest tests using mocked API responses to verify:
+>    - A fully successful batch is cached.
+>    - A partially failed batch returns its successful tracks but is not cached as complete.
+>    - A subsequent request after a partially failed batch can retry fetching the catalog.
+>    - A completely failed batch still rejects appropriately.
+> 7. Avoid additional API calls beyond the existing request plan during a normal successful load.
+> 8. Update documentation only if the existing documentation becomes inaccurate.
+> 
+> QUALITY CHECKS:
+> - npm test
+> - npm run build
+> - npm run lint -- --max-warnings 0
+> 
+> Report the exact files changed, tests added, test results, and any relevant edge cases.
+> 
+> CONSTRAINTS:
+> - Make the smallest safe change possible.
+> - Do not redesign the caching architecture.
+> - Do not add dependencies.
+> - Do not change the UI or visual design.
+> - Follow CLAUDE.md and AGENTS.md.
+> - Do not run git commit or git push.
+> - Stop after completing this single task.
+> </pasted_content id="5dbb">
+### Manual Verification – iTunes Cache Reliability Fix
+
+- Verified that all 189 unit tests pass.
+- Confirmed that the production build succeeds.
+- Confirmed that ESLint reports no errors or warnings.
+- Reviewed the reported changes to the iTunes caching logic.

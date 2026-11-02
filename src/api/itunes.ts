@@ -194,9 +194,12 @@ function startBatch(): CatalogBatch {
           ? reason
           : new Error('Something went wrong while loading the Vault.')
       }
-      memoryCache = current.tracks
-      // Partial results are used now but not persisted, so the next load tries again.
-      if (!failure) writePersistentCache(current.tracks)
+      // Only a complete batch becomes the reusable cache (memory + localStorage). A partial
+      // catalog is still returned to this batch's callers, but the next load fetches again.
+      if (!failure) {
+        memoryCache = current.tracks
+        writePersistentCache(current.tracks)
+      }
       return current.tracks
     })
     .finally(() => {

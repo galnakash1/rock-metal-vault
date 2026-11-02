@@ -25,6 +25,7 @@ const SORT_OPTIONS: ReadonlyArray<{ value: SortKey; label: string }> = [
   { value: 'year-oldest', label: 'Release year (oldest)' },
   { value: 'duration-longest', label: 'Duration (longest)' },
   { value: 'duration-shortest', label: 'Duration (shortest)' },
+  { value: 'vault-picks', label: 'Vault Picks — Curated Favorites' },
 ]
 
 function FilterBar({
@@ -138,6 +139,7 @@ function FilterBar({
             className="filter-input"
             value={filters.sort}
             onChange={(event) => update({ sort: toSort(event.target.value) })}
+            aria-describedby={filters.sort === 'vault-picks' ? 'vault-picks-note' : undefined}
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -145,6 +147,12 @@ function FilterBar({
               </option>
             ))}
           </select>
+          {filters.sort === 'vault-picks' && (
+            <p id="vault-picks-note" className="filter-sort-note">
+              Curated favorites from featured releases and standout bands. Not an official
+              popularity chart.
+            </p>
+          )}
         </div>
       </div>
 

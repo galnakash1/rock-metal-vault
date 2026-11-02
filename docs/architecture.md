@@ -51,7 +51,8 @@ src/
 │   ├── streamingLinks.ts     # Apple Music / Spotify / YouTube full-song links
 │   ├── streamingLinks.test.ts
 │   ├── relatedTracks.ts      # "More Like This": deterministic related tracks from the loaded catalog
-│   └── relatedTracks.test.ts
+│   ├── relatedTracks.test.ts
+│   └── featuredTracks.ts     # isFeaturedTrack / featuredRank / albumKey (shared by catalogCache + Vault Picks)
 │
 ├── components/               # Reusable building blocks (one component per file)
 │   ├── Navbar.tsx
@@ -152,7 +153,7 @@ playerEngine.ts (module store, outside React): one <audio> + Web Audio graph
 | `Navbar` | Brand logo + `NavLink`s (Vault Catalog / Festival Poster / Riff Arena / Playlist Builder; a 2×2 grid on phones); highlights the active route; shows the setlist count badge; a stage truss hangs under it | `setlistCount: number` |
 | `TrackCard` | `React.memo`. 300px artwork, title, artist, origin flag + country, style badge, release year, duration, explicit badge; links to `/tracks/:id`. Below the link: a `CardPlayButton` and the setlist toggle. Callbacks must be stable (`useCallback`) so cards skip re-renders | `track`, `inSetlist`, `onToggleSetlist`, `onPlay` |
 | `CardPlayButton` | ▶/❚❚ per card. Reads one primitive (`'idle' \| 'playing' \| 'paused'`) with `usePlayerSelector`, so playback ticks re-render no cards. Idle → `onPlay(track)` (the page queues its filtered list from here); otherwise toggles | `track`, `onPlay` |
-| `FilterBar` | Controlled search input + Reset filters button, `MoodCapsules`, Origin Country `<select>` (flag + name), Style `<select>`, Artist `<select>`, Sort `<select>`, and a live "Showing X of Y tracks · total" summary | `filters`, `countries`, `subgenres`, `artists`, `resultCount`, `totalCount`, `resultDurationMs`, `canReset`, `onChange`, `onReset` |
+| `FilterBar` | Controlled search input + Reset filters button, `MoodCapsules`, Origin Country `<select>` (flag + name), Style `<select>`, Artist `<select>`, Sort `<select>` (incl. "Vault Picks — Curated Favorites", which shows a note linked via `aria-describedby` saying it isn't an official popularity chart), and a live "Showing X of Y tracks · total" summary | `filters`, `countries`, `subgenres`, `artists`, `resultCount`, `totalCount`, `resultDurationMs`, `canReset`, `onChange`, `onReset` |
 | `MoodCapsules` | "All" + one toggle pill (`aria-pressed`) per `MOOD_CAPSULES` entry; clicking the active pill returns to All. Rendered inside `FilterBar` | `activeMood: MoodId \| null`, `onChange` |
 | `AudioPreviewPlayer` | **Amp Console:** play/pause, scrubber and time display, `<canvas>` frequency bars, EQ preset buttons, and a plain-audio fallback note. It owns no audio itself: it reads `usePlayer()` and calls the player engine, so if its track is already playing it picks that playback up | `track` |
 | `MiniPlayer` | **Now Playing bar** (fixed bottom): artwork, title, artist + flag, an EQ preset `<select>` (`aria-label="EQ preset"` → `setPreset`; on phones a compact "EQ" pill with the select layered invisibly on top), time, progress line, play/pause, link back to `/tracks/:id`, and ✕ stop. Hidden when nothing is loaded and on the loaded track's own detail page (`shouldShowMiniPlayer`) | — (reads `usePlayer()` + `useLocation()`) |
@@ -247,6 +248,7 @@ export type SortKey =
   | 'title-asc' | 'title-desc' | 'artist-asc'
   | 'year-newest' | 'year-oldest'
   | 'duration-shortest' | 'duration-longest'
+  | 'vault-picks'                // curated favorites — not a popularity chart
 
 export interface TrackFilters {
   search: string                 // title/artist/album/subgenre/country; '' = no search
@@ -609,7 +611,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **199 tests in 8 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, `relatedTracks`, and `api/itunes`: the request plan, plus `fetchCatalog` partial-failure and caching behavior against a mocked `fetch` and `localStorage`); the label says which task added the tests. The tests never touch the network.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **208 tests in 8 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, `relatedTracks`, and `api/itunes`: the request plan, plus `fetchCatalog` partial-failure and caching behavior against a mocked `fetch` and `localStorage`); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 
@@ -626,7 +628,8 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `isRockOrMetalGenre` | `(genre: string) => boolean` | Exact match against the `ROCK_METAL_GENRES` allowlist (Rock, Hard Rock, Metal, Punk, …; no "Alternative") | ✅ Task 4 |
 | `isVaultTrack` | `(track: Pick<Track, 'genre' \| 'artist' \| 'artistId'>) => boolean` | Allowlisted genre **or** curated artist (by id or name, namesakes excluded); used by `fetchCatalog` | ✅ Task 4 + expansion |
 | `filterTracks` | `(tracks, filters: Omit<TrackFilters, 'sort'>) => Track[]` | Case-insensitive, trimmed search across title/artist/album/subgenre/country, combined (AND) with exact country, subgenre, and artist matches and the mood capsule | ✅ Task 4 |
-| `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use one shared `Intl.Collator` | ✅ Task 4 |
+| `sortTracks` | `(tracks: Track[], sort: SortKey) => Track[]` | Returns a **new** array (never mutates the input); text sorts use one shared `Intl.Collator`; `'vault-picks'` delegates to `rankVaultPicks` | ✅ Task 4 |
+| `getVaultPicksTier` / `rankVaultPicks` | `(track) => 0 \| 1 \| 2` / `(tracks) => Track[]` | **Vault Picks** (editorial, not popularity). Tier 0: featured releases (`isFeaturedTrack`); tier 1: flagship bands (`HEADLINER_ARTISTS` + `DEEP_CATALOG_ARTISTS`, by lead artist); tier 2: everything else. Inside a tier, bands take turns (round 1 = each band's first track, bands A–Z by lead-artist key; round 2 = each band's second…), each band earliest release first, then title, then id. Every input track appears exactly once, the result doesn't depend on input order, and the input isn't mutated | ✅ Vault Picks |
 | `isCompilationAlbum` | `(collectionName?) => boolean` | Greatest Hits, Best Of, Anthology, Essential, Icon, 20th Century Masters, Retrospective, The Singles, B-Sides, soundtracks (whole words) | ✅ upgrade 2 |
 | `getTotalDuration` | `(tracks: Track[]) => number` | Sum of `durationMs` (0 for an empty list) | ✅ Task 4 |
 | `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | `(tracks: Track[]) => OriginCountry[] / Subgenre[] / string[]` | Sorted, de-duplicated option lists for `FilterBar` ("Unknown" country last) | ✅ Task 4 |
@@ -692,7 +695,7 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `CATALOG_CACHE_KEY` / `CATALOG_CACHE_TTL_MS` | `'rmv:catalog:v6'` / 6 h | Versioned localStorage cache key and lifetime | ✅ |
 | `mergeCatalogTracks` / `dedupeSongs` | `(current, incoming) => Track[]` / `(tracks) => Track[]` | Progressive merge (on-screen tracks keep their place) dropping duplicate ids and repeat releases of the same song; the earliest release wins | ✅ |
 | `capTracksPerArtist` / `MAX_SONGS_PER_ARTIST` | `(tracks, capFor?) => Track[]` / `25` | Per-band cap (25, or `SONG_CAP_OVERRIDES`: Bring Me The Horizon 35); featured tracks are always kept and count toward it | ✅ upgrade 2 + catalog update |
-| `isFeaturedTrack` | `(track) => boolean` | A featured track id or any edition of a featured album; featured copies win `dedupeSongs` and `canonicalizeAlbumArtwork` (the standard edition first) | ✅ catalog update |
+| `isFeaturedTrack` (from `featuredTracks.ts`, re-exported here) | `(track) => boolean` | A featured track id or any edition of a featured album; featured copies win `dedupeSongs` and `canonicalizeAlbumArtwork` (the standard edition first). It lives in `featuredTracks.ts` (which depends only on `artistMetadata` and `riffTabs`), so `trackUtils.ts` can use it for Vault Picks without a circular import with `catalogCache.ts` | ✅ catalog update |
 | `canonicalizeAlbumArtwork` | `(tracks) => Track[]` | One album name + cover per studio album: its earliest release | ✅ upgrade 2 |
 | `getStreamingLinks` / `getSearchQuery` (`streamingLinks.ts`) | `(track) => StreamingLink[]` / `(track) => string` | Apple Music / Spotify / YouTube full-song links | ✅ upgrade 2 |
 | `getQueueStep` / `formatQueuePosition` (`audioUtils.ts`) | `(length, index, direction, currentTime?) => number \| 'restart' \| null` / `(label, index, length) => string` | Lineup queue navigation and the "Setlist 2 / 7" label | ✅ |

@@ -1,5 +1,6 @@
 import type { Track } from '../types/track'
-import { FEATURED_ALBUMS, FEATURED_TRACK_IDS, getLeadArtistKey, getSongCap } from './artistMetadata'
+import { getLeadArtistKey, getSongCap } from './artistMetadata'
+import { albumKey, featuredRank, isFeaturedTrack } from './featuredTracks'
 import { normalizeTitleKey } from './riffTabs'
 import { reviveStoredTracks } from './setlistUtils'
 import { dedupeTracks } from './trackUtils'
@@ -51,31 +52,8 @@ export function parseCatalogCache(
 const songKey = (track: Pick<Track, 'artist' | 'title'>): string =>
   `${getLeadArtistKey(track.artist)}|${normalizeTitleKey(track.title)}`
 
-/** Same studio album, same lead artist — "Nevermind", "Nevermind (Remastered)", "Nevermind (Deluxe)". */
-const albumKey = (track: Pick<Track, 'artist' | 'album'>): string =>
-  `${getLeadArtistKey(track.artist)}|${normalizeTitleKey(track.album)}`
-
-const FEATURED_IDS: ReadonlySet<number> = new Set(FEATURED_TRACK_IDS)
-// album key → the featured edition's exact title ("sempiternal", not "sempiternal (deluxe)")
-const FEATURED_ALBUM_TITLES: ReadonlyMap<string, string> = new Map(
-  FEATURED_ALBUMS.map((featured) => [albumKey(featured), featured.album.toLowerCase()]),
-)
-
-/**
- * 2 = a featured release itself (a listed track id, or the featured album's standard edition);
- * 1 = another edition of a featured album; 0 = not featured.
- */
-function featuredRank(track: Pick<Track, 'id' | 'artist' | 'album'>): number {
-  if (FEATURED_IDS.has(track.id)) return 2
-  const title = FEATURED_ALBUM_TITLES.get(albumKey(track))
-  if (title === undefined) return 0
-  return track.album.toLowerCase() === title ? 2 : 1
-}
-
-/** A track from a featured release (artistMetadata): pinned past the per-band cap. */
-export function isFeaturedTrack(track: Pick<Track, 'id' | 'artist' | 'album'>): boolean {
-  return featuredRank(track) > 0
-}
+// Featured-release helpers live in featuredTracks.ts; re-exported here for existing imports.
+export { isFeaturedTrack }
 
 const releaseTime = (track: Pick<Track, 'releaseDate'>): number => {
   const time = Date.parse(track.releaseDate)

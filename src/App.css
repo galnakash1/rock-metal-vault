@@ -402,6 +402,7 @@
 
 .filter-field {
   display: grid;
+  align-content: start; /* a taller field (the Vault Picks note) doesn't push the others' selects down */
   gap: 6px;
   min-width: 0;
 }
@@ -459,6 +460,13 @@ select.filter-input {
 select.filter-input option {
   background: var(--charcoal-800);
   color: var(--text-strong);
+}
+
+/* Shown under "Sort by" while Vault Picks is selected */
+.filter-sort-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
 }
 
 .filter-summary {

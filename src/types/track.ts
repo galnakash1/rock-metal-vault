@@ -145,6 +145,7 @@ export type SortKey =
   | 'year-oldest'
   | 'duration-shortest'
   | 'duration-longest'
+  | 'vault-picks' // curated favorites (featured → flagship bands → the rest); not a popularity chart
 
 export interface TrackFilters {
   search: string // free text over title/artist/album/subgenre/country; '' = no search

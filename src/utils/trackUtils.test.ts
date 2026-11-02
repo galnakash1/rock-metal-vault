@@ -64,7 +64,9 @@ import {
   matchesMood,
   normalizeTrack,
   normalizeTracks,
+  getVaultPicksTier,
   parseSearchResults,
+  rankVaultPicks,
   resolveTrackDetail,
   sortTracks,
   upgradeArtworkUrl,
@@ -1300,5 +1302,103 @@ describe('resolveTrackDetail (/tracks/:id while the catalog loads progressively)
       expect(resolveTrackDetail(id, settled)).toEqual({ kind: 'not-found' })
       expect(resolveTrackDetail(id, { ...settled, status: 'error' })).toEqual({ kind: 'error' })
     }
+  })
+})
+
+// ---------- Vault Picks sort ----------
+
+describe('Vault Picks — Curated Favorites sort', () => {
+  // Tier 1: featured releases · Tier 2: flagship bands · Tier 3: everything else.
+  const breakStuff = makeTrack({ id: 1440754477, artist: 'Limp Bizkit', title: 'Break Stuff', album: 'Significant Other', releaseDate: '1999-06-22T07:00:00Z' })
+  const shadowMoses = makeTrack({ id: 9001, artist: 'Bring Me The Horizon', title: 'Shadow Moses', album: 'Sempiternal', releaseDate: '2013-04-01T07:00:00Z' })
+  const sempiternalDeluxe = makeTrack({ id: 9002, artist: 'Bring Me The Horizon', title: 'Join the Club', album: 'Sempiternal (Deluxe)', releaseDate: '2013-04-01T07:00:00Z' })
+  const oneTrack = makeTrack({ id: 9100, artist: 'Metallica', title: 'One', releaseDate: '1988-09-07T07:00:00Z' })
+  const enterSandman = makeTrack({ id: 9101, artist: 'Metallica', title: 'Enter Sandman', releaseDate: '1991-08-12T07:00:00Z' })
+  const bleed = makeTrack({ id: 9200, artist: 'Meshuggah', title: 'Bleed', releaseDate: '2008-03-07T07:00:00Z' })
+  const garage = makeTrack({ id: 9300, artist: 'Unknown Garage Band', title: 'Basement Riff' })
+  const local = makeTrack({ id: 9301, artist: 'Another Local Act', title: 'Demo' })
+  const catalog = [garage, oneTrack, local, bleed, shadowMoses, enterSandman, breakStuff, sempiternalDeluxe]
+
+  it('ranks featured releases first, then flagship bands, then everything else', () => {
+    const ranked = sortTracks(catalog, 'vault-picks')
+    const tiers = ranked.map(getVaultPicksTier)
+    expect(tiers).toEqual([...tiers].sort((a, b) => a - b))
+    expect(tiers).toEqual([0, 0, 0, 1, 1, 1, 2, 2])
+    expect(ids(ranked.slice(0, 3)).sort()).toEqual(ids([breakStuff, shadowMoses, sempiternalDeluxe]).sort())
+  })
+
+  it('treats every flagship band — headliners and deep-tier bands like Meshuggah — as tier 2', () => {
+    expect(getVaultPicksTier(oneTrack)).toBe(1)
+    expect(getVaultPicksTier(bleed)).toBe(1) // deep tier only, not in HEADLINER_ARTISTS
+    expect(getVaultPicksTier({ id: 1, artist: 'Metallica & San Francisco Symphony', album: 'S&M' })).toBe(1) // lead artist
+    expect(getVaultPicksTier(sempiternalDeluxe)).toBe(0) // any edition of a featured album
+    expect(getVaultPicksTier(garage)).toBe(2)
+  })
+
+  it('takes turns between bands inside a tier: one track per band per round, bands A–Z, earliest release first', () => {
+    const slayer = [1983, 1986].map((year, index) =>
+      makeTrack({ id: 9400 + index, artist: 'Slayer', title: `Slayer ${year}`, releaseDate: `${year}-01-01T00:00:00Z` }),
+    )
+    const megadeth = makeTrack({ id: 9500, artist: 'Megadeth', title: 'Holy Wars', releaseDate: '1990-09-24T07:00:00Z' })
+    const metallica3 = makeTrack({ id: 9102, artist: 'Metallica', title: 'Battery', releaseDate: '1986-03-03T07:00:00Z' })
+    const ranked = rankVaultPicks([enterSandman, ...slayer, oneTrack, megadeth, metallica3])
+    expect(ranked.map((track) => `${track.artist}: ${track.title}`)).toEqual([
+      'Megadeth: Holy Wars', // round 1, bands A–Z
+      'Metallica: Battery', //   Metallica's earliest (1986)
+      'Slayer: Slayer 1983',
+      'Metallica: One', // round 2 (1988)
+      'Slayer: Slayer 1986',
+      'Metallica: Enter Sandman', // round 3 (1991)
+    ])
+    // No band appears twice in a row while another band still has tracks left.
+    expect(ranked.slice(0, 5).every((track, index, list) => index === 0 || track.artist !== list[index - 1]?.artist)).toBe(true)
+  })
+
+  it('gives the same order for any input order (deterministic, independent of batch order)', () => {
+    const expected = ids(rankVaultPicks(catalog))
+    const rotated = [...catalog.slice(3), ...catalog.slice(0, 3)]
+    expect(ids(rankVaultPicks([...catalog].reverse()))).toEqual(expected)
+    expect(ids(rankVaultPicks(rotated))).toEqual(expected)
+    expect(ids(sortTracks(rankVaultPicks(catalog), 'vault-picks'))).toEqual(expected)
+    // Ties inside one band fall back to title, then id.
+    const twins = [makeTrack({ id: 2, artist: 'Twin Band', title: 'Same' }), makeTrack({ id: 1, artist: 'Twin Band', title: 'Same' })]
+    expect(ids(rankVaultPicks(twins))).toEqual([1, 2])
+  })
+
+  it('reorders only the filtered results and keeps every filter in effect', () => {
+    // The catalog pipeline: filterTracks(tracks, filters) → sortTracks(…, filters.sort)
+    const filtered = filterTracks(tracks, { ...NO_FILTERS, country: 'United States' })
+    const ranked = sortTracks(filtered, 'vault-picks')
+    expect(ranked).toHaveLength(filtered.length)
+    expect(ranked.every((track) => track.originCountry === 'United States')).toBe(true)
+    expect(ids(ranked).sort()).toEqual(ids(filtered).sort())
+    const searched = sortTracks(filterTracks(catalog, { ...NO_FILTERS, search: 'metallica' }), 'vault-picks')
+    expect(ids(searched)).toEqual([oneTrack.id, enterSandman.id])
+  })
+
+  it('keeps every track exactly once — nothing dropped, nothing added', () => {
+    const all = [...tracks, ...catalog]
+    const ranked = sortTracks(all, 'vault-picks')
+    expect(ranked).toHaveLength(all.length)
+    expect(ids(ranked).sort((a, b) => a - b)).toEqual(ids(all).sort((a, b) => a - b))
+    expect(new Set(ranked).size).toBe(all.length) // same objects, not copies
+  })
+
+  it('handles empty and tiny catalogs', () => {
+    expect(sortTracks([], 'vault-picks')).toEqual([])
+    expect(sortTracks([garage], 'vault-picks')).toEqual([garage])
+    expect(ids(sortTracks([garage, breakStuff], 'vault-picks'))).toEqual([breakStuff.id, garage.id])
+  })
+
+  it('never mutates the input', () => {
+    const input = Object.freeze([...catalog])
+    const snapshot = [...input]
+    expect(() => sortTracks(input as Track[], 'vault-picks')).not.toThrow()
+    expect(input).toEqual(snapshot)
+  })
+
+  it('leaves the default sort and the other sort options unchanged', () => {
+    expect(DEFAULT_FILTERS.sort).toBe('artist-asc')
+    expect(titles(sortTracks([enterSandman, oneTrack], 'title-asc'))).toEqual(['Enter Sandman', 'One'])
   })
 })

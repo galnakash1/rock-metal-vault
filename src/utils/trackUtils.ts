@@ -10,7 +10,16 @@ import type {
   Track,
   TrackFilters,
 } from '../types/track'
-import { COUNTRY_FLAGS, findArtistMetadata, getArtistMetadata } from './artistMetadata'
+import {
+  COUNTRY_FLAGS,
+  DEEP_CATALOG_ARTISTS,
+  HEADLINER_ARTISTS,
+  findArtistMetadata,
+  getArtistMetadata,
+  getLeadArtistKey,
+  normalizeArtistKey,
+} from './artistMetadata'
+import { isFeaturedTrack } from './featuredTracks'
 
 // ---------- Formatting ----------
 
@@ -332,7 +341,7 @@ const toTimestamp = (isoDate: string): number => {
   return Number.isNaN(time) ? 0 : time
 }
 
-const comparators: Record<SortKey, (a: Track, b: Track) => number> = {
+const comparators: Record<Exclude<SortKey, 'vault-picks'>, (a: Track, b: Track) => number> = {
   'title-asc': (a, b) => compareText(a.title, b.title),
   'title-desc': (a, b) => compareText(b.title, a.title),
   'artist-asc': (a, b) => compareText(a.artist, b.artist) || compareText(a.title, b.title),
@@ -344,7 +353,68 @@ const comparators: Record<SortKey, (a: Track, b: Track) => number> = {
 
 /** Returns a new sorted array; the input array is never mutated. */
 export function sortTracks(tracks: Track[], sort: SortKey): Track[] {
+  if (sort === 'vault-picks') return rankVaultPicks(tracks)
   return [...tracks].sort(comparators[sort])
+}
+
+// ---------- Vault Picks (curated favorites — not a popularity chart) ----------
+
+// Flagship bands: the headliner tier plus the deep tier (which adds Meshuggah).
+const FLAGSHIP_ARTIST_KEYS: ReadonlySet<string> = new Set(
+  [...HEADLINER_ARTISTS, ...DEEP_CATALOG_ARTISTS].map(normalizeArtistKey),
+)
+
+/** 0 = featured release · 1 = flagship band · 2 = everything else. */
+export function getVaultPicksTier(track: Pick<Track, 'id' | 'artist' | 'album'>): 0 | 1 | 2 {
+  if (isFeaturedTrack(track)) return 0
+  return FLAGSHIP_ARTIST_KEYS.has(getLeadArtistKey(track.artist)) ? 1 : 2
+}
+
+const releaseTime = (track: Track): number => {
+  const time = Date.parse(track.releaseDate)
+  return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time // unknown dates last
+}
+
+/** Within one band: earliest release first, then title, then id. */
+const compareWithinArtist = (a: Track, b: Track): number =>
+  releaseTime(a) - releaseTime(b) || compareText(a.title, b.title) || a.id - b.id
+
+/** Bands A–Z by lead-artist key (exact key as the final tie-breaker). */
+const compareArtistKeys = (a: string, b: string): number =>
+  compareText(a, b) || (a < b ? -1 : a > b ? 1 : 0)
+
+/**
+ * Vault Picks: an editorial ordering from curated metadata — never streams, sales or charts.
+ * Tier 1 = featured releases (isFeaturedTrack), tier 2 = flagship bands (HEADLINER_ARTISTS +
+ * DEEP_CATALOG_ARTISTS), tier 3 = everything else. Inside a tier the bands take turns (round
+ * robin): round 1 shows each band's first track (bands A–Z), round 2 each band's second, and so
+ * on — so the first results aren't one band in a row. Every input track appears exactly once, the
+ * order depends only on track data (not on input or batch order), and the input isn't mutated.
+ */
+export function rankVaultPicks(tracks: readonly Track[]): Track[] {
+  const tiers: Array<Map<string, Track[]>> = [new Map(), new Map(), new Map()]
+  for (const track of tracks) {
+    const byArtist = tiers[getVaultPicksTier(track)]
+    if (!byArtist) continue
+    const key = getLeadArtistKey(track.artist)
+    const list = byArtist.get(key)
+    if (list) list.push(track)
+    else byArtist.set(key, [track])
+  }
+
+  const ranked: Track[] = []
+  for (const byArtist of tiers) {
+    const artists = [...byArtist.keys()].sort(compareArtistKeys)
+    const queues = artists.map((key) => [...(byArtist.get(key) ?? [])].sort(compareWithinArtist))
+    const rounds = Math.max(0, ...queues.map((queue) => queue.length))
+    for (let round = 0; round < rounds; round += 1) {
+      for (const queue of queues) {
+        const track = queue[round]
+        if (track) ranked.push(track)
+      }
+    }
+  }
+  return ranked
 }
 
 // ---------- Aggregates ----------

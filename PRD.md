@@ -85,7 +85,7 @@ https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
 - **Fast with ~1,000 tracks:** the grid renders the first 48 cards and reveals 48 more as you scroll near the end (an `IntersectionObserver` sentinel) or press **Show More Tracks**. Cards are memoized, and returning to `/` from another page commits in under 16 ms.
 - A **search input** that filters live (as you type) by track title, artist, album, style/subgenre, or origin country, ignoring case.
 - **Origin Country**, **Style/Subgenre**, and **Artist** filters (options come from the loaded data; Style replaces the coarse iTunes genre).
-- A **sort selector**: Title A–Z / Z–A, Artist A–Z, Newest / Oldest release, Shortest / Longest duration.
+- A **sort selector**: Artist A–Z (default), Title A–Z / Z–A, Newest / Oldest release, Longest / Shortest duration, and **Vault Picks — Curated Favorites**. Vault Picks is an editorial ordering from curated metadata, **not** a popularity chart. Featured releases come first, then flagship bands (headliner + deep-catalog lists), then everything else; inside each tier the bands take turns, earliest release first. It only reorders the filtered results, keeps every track, is deterministic, and shows the note "Curated favorites from featured releases and standout bands. Not an official popularity chart." under the dropdown.
 - **Sonic Mood Capsules** (signature feature 1): a row of mood pills above the list. Clicking a pill applies that mood; clicking the active pill again clears it. One mood can be active at a time, and it combines (AND) with search, filters, and sort.
 
   | Pill | Rule |
@@ -205,12 +205,13 @@ https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
 21. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
 22. **When I** open the app for the first time with DevTools → Network open, **I see** the catalog requests go to `itunes.apple.com/search` and `itunes.apple.com/lookup`, and every card on screen comes from their responses.
 23. **When I** scroll to the bottom of a metalcore track's page, **I see** "More Like This" with up to 6 other metalcore tracks (artwork, title, artist), none of them the current track. **When I** click one, **I see** that track's page from the top, with a new set of related tracks, while any preview I was playing keeps playing.
+24. **When I** filter by Origin Country "Israel" and choose "Vault Picks — Curated Favorites", **I see** the same number of Israeli tracks, reordered so that bands take turns, plus a note that this is not an official popularity chart. **When I** choose "Vault Picks" with no filters, **I see** featured releases first (Bring Me The Horizon, Limp Bizkit and Saliva taking turns).
 
 ## 7. Non-Functional Requirements
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint -- --max-warnings 0`, and `npm test` all pass with zero errors or warnings; `npm run test:ui` opens the Vitest UI in the browser.
-- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **199 tests in 8 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **208 tests in 8 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 

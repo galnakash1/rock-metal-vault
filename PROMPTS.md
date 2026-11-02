@@ -688,3 +688,100 @@ Completed final pre-defense rubric audit: consolidated tasks.md into 12 numbered
 - Verified that no duplicate tracks appear.
 - Confirmed that the global audio player continues working.
 - Checked responsive horizontal scrolling at 375px.
+**19:14 · claude**
+
+> <pasted_content id="5dbb">
+> Implement one focused feature in Rock & Metal Vault: a new catalog sorting option called "Vault Picks — Curated Favorites".
+> 
+> GOAL:
+> Allow users to discover editorially recommended tracks using the existing curated metadata. This is NOT an official popularity ranking.
+> 
+> IMPLEMENTATION:
+> 
+> 1. Add a new SortKey value named "vault-picks" in src/types/track.ts.
+> 
+> 2. Add "Vault Picks — Curated Favorites" to the existing Sort by dropdown in FilterBar.tsx.
+> 
+> 3. Implement the ranking logic in the existing track sorting utilities. Reuse these existing project resources:
+>    - FEATURED_TRACK_IDS
+>    - FEATURED_ALBUMS and isFeaturedTrack()
+>    - HEADLINER_ARTISTS
+>    - getLeadArtistKey() and normalizeArtistKey()
+> 
+> 4. Use three main priority tiers:
+>    - Tier 1: Featured tracks and featured releases.
+>    - Tier 2: Tracks by curated headliner artists.
+>    - Tier 3: All remaining catalog tracks.
+> 
+> 5. Within each tier, promote artist diversity so that the first visible results are not dominated by many consecutive songs from one artist. Use a deterministic and easily explainable ordering.
+> 
+> 6. Never claim that the ranking represents real streams, plays, sales, charts or Apple Music popularity.
+> 
+> 7. Vault Picks must reorder the currently filtered results, not override or reset existing search, country, style, artist or mood filters.
+> 
+> 8. All tracks must remain available. Do not remove songs, introduce duplicates, or modify the catalog data itself.
+> 
+> 9. Make the ordering deterministic and independent of incoming API batch order. Do not mutate the input array.
+> 
+> 10. Preserve the existing default sort, navigation, progressive loading, 48-track reveal, playback queue, caching and setlist behavior.
+> 
+> 11. Add a short, accessible explanation next to the sort control when Vault Picks is selected:
+> "Curated favorites from featured releases and standout bands. Not an official popularity chart."
+> 
+> TESTING:
+> Add meaningful Vitest tests for:
+> - Featured tracks ranking ahead of other tracks.
+> - Headliner tracks ranking ahead of ordinary tracks.
+> - Artist diversity.
+> - Stable ordering with shuffled input.
+> - Compatibility with existing filters.
+> - No missing or duplicated tracks.
+> - Empty arrays and small catalogs.
+> - Input immutability.
+> 
+> Run:
+> npm test
+> npm run build
+> npm run lint -- --max-warnings 0
+> 
+> DOCUMENTATION:
+> Update README.md, PRD.md and docs/architecture.md where relevant, including the new test count.
+> Do not rewrite historical tasks.md records.
+> 
+> CONSTRAINTS:
+> - No new API calls.
+> - No new dependencies.
+> - No unrelated refactoring.
+> - No visual redesign.
+> - Follow AGENTS.md and CLAUDE.md.
+> - Present a brief plan for approval first if required by AGENTS.md.
+> - Do not commit or push changes.
+> 
+> Stop after this feature and report all changes and actual test results.
+> </pasted_content id="5dbb">
+
+**19:16 · claude**
+
+> <pasted_content id="5dbb">
+> Approved. Please proceed with your recommended implementation.
+> 
+> I approve both architectural decisions:
+> 
+> 1. Extract `isFeaturedTrack()` and its required helpers into the new `featuredTracks.ts` module to avoid circular imports. Preserve existing behavior, exports, featured-track prioritization, deduplication, and backward compatibility. Ensure the new module does not depend on `trackUtils.ts` or `catalogCache.ts`.
+> 
+> 2. Include both `HEADLINER_ARTISTS` and `DEEP_CATALOG_ARTISTS` in Tier 2, so Meshuggah receives the same flagship priority as the other curated bands.
+> 
+> I also approve your deterministic three-tier ranking and round-robin artist diversity approach.
+> 
+> Additional requirements:
+> - Preserve all existing sorting options and the current default sort.
+> - Ensure Vault Picks works correctly with all existing filters.
+> - Preserve the existing 48-track reveal behavior.
+> - Ensure stable ordering with deterministic tie-breakers.
+> - Keep `tasks.md` unchanged.
+> - Avoid unrelated refactoring or visual changes.
+> 
+> After implementation, run all unit tests, the production build, and ESLint. Report the exact files changed, new tests added, total test count, and any regressions or edge cases.
+> 
+> Do not commit or push. Stop after implementation and report the results.
+> </pasted_content id="5dbb">

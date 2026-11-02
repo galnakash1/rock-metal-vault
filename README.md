@@ -12,7 +12,7 @@ It is a front-end-only single-page app built with **React 19 + TypeScript + Vite
 
 | Route | Page | What you can do |
 | --- | --- | --- |
-| `/` | **Vault Catalog** | Browse ~1,030 studio tracks as cards (rendered 48 at a time as you scroll, or with **Show More Tracks**). Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort, press ▶ on any card to queue the filtered list from that track, and add tracks to your setlist. |
+| `/` | **Vault Catalog** | Browse ~1,030 studio tracks as cards (rendered 48 at a time as you scroll, or with **Show More Tracks**). Search live, pick a Sonic Mood Capsule, filter by origin country / style / artist, sort (including **Vault Picks**), press ▶ on any card to queue the filtered list from that track, and add tracks to your setlist. |
 | `/tracks/:id` | **Track Detail** | 600×600 artwork and track facts, full-song links (Apple Music, Spotify, YouTube), the **Amp Console** (preview player with live EQ and visualizer), the **6-String Guitar Riff Tab** with a playhead that follows the music, and **More Like This**: up to 6 related tracks to explore next. |
 | `/setlist` | **Festival Lineup & Poster Builder** | Your saved tracks become a festival poster (Headliners, Main Stage and World Tour dates) in one of 6 themes. Play the whole lineup in running order (⏮ / ⏭, auto-advance), or any single row, and open full songs on Apple Music, Spotify or YouTube. |
 | `/arena` | **Riff Arena** | The **Riff Blind-Test Tournament** (4 stages of 5 rounds, 3 amp-tube lives, final scoreboard) and the **Head-to-Head Track Battle**. |
@@ -53,6 +53,12 @@ A **Now Playing mini-player** stays at the bottom of every page, so a preview ke
   - **3 amp-tube lives for the whole run.** A wrong answer or a timeout costs a life. Clearing a stage shows a **"Stage X Cleared!"** screen and restores one life (max 3).
   - The run ends with **Tournament Conquered!** or **Game Over**. The **Final Scoreboard** shows the stage reached, your rank (Garage Roadie → Immortal Riff God, out of 35,000 points), accuracy, streaks, your all-time records (saved in `localStorage`) and a round-by-round recap with Add to Setlist buttons.
 - **🧪 Playlist Builder (Sonic Diagnostic):** five questions (tempo & energy, era & guitar tone, mood, regional scene, iconic vs deep cuts). A pure, unit-tested scoring function ranks every catalog track. You get a **Metal Persona** (e.g. *Black Metal Frost Wraith*) and a 10-track playlist with at most 2 songs per band. Preview any song, **▶ Play All 10 Tracks**, **⇄ Swap** a single track, **Add All 10 to Festival Setlist**, or re-run the diagnostic.
+- **⭐ Vault Picks — Curated Favorites:** a Sort by option that puts editorial picks first, using the app's curated metadata. It is **not** a popularity chart (no streams, sales or chart data). It has three tiers:
+  1. featured releases (all of *Sempiternal*, and the Limp Bizkit and Saliva studio hits);
+  2. flagship bands (the headliner and deep-catalog lists, so Meshuggah too);
+  3. everything else.
+
+  Inside each tier the bands take turns: each band's first track (bands A–Z), then each band's second, and so on, earliest release first. That keeps the first results from being one band in a row. It only reorders the current search and filter results, never removes a track, and gives the same order however the catalog batches arrive. A short note under the dropdown says it's not an official popularity chart.
 - **🔗 More Like This:** every track page ends with a horizontal strip of up to 6 related tracks from the catalog already loaded (no extra API requests). Same style first, preferring other artists and the closest release years; then, only if needed, the same iTunes genre. Unrelated tracks are never used as filler, so a rare style may show fewer cards or none. The order is deterministic, and the strip updates as later catalog batches arrive.
 - **🎧 Full-song links:** the API only has 30-second previews, so the detail page, the running order and the playlist link each song to Apple Music (the exact track), Spotify and YouTube (searches).
 - **⚔️ Head-to-Head Track Battle:** pick any two tracks with searchable pickers. They're compared on duration (longer wins), release year (earlier wins), style, origin, guitar tuning and riff tempo. Each card has a preview button and a setlist toggle.
@@ -102,11 +108,11 @@ npm run test:ui
 
 `npm run test:ui` runs [`scripts/test-ui.mjs`](scripts/test-ui.mjs). It starts the tests in watch mode with **@vitest/ui** and opens the UI's `?token=` URL, so the browser is authenticated straight away. Vitest 5 protects its UI with a token, and plain `vitest --ui --open` reopens the bare URL after the first run, which shows "Vitest UI requires authentication" in a browser that doesn't have the cookie yet. Set `BROWSER=none` to only print the URL.
 
-There are **199 unit tests in 8 files**. They cover the app's pure logic and never touch the network:
+There are **208 unit tests in 8 files**. They cover the app's pure logic and never touch the network:
 
 | Test file | Covers |
 | --- | --- |
-| `src/utils/trackUtils.test.ts` | Duration formatting, artwork upgrade, response validation, the studio-only (no live) filter, the compilation filter, normalization and de-duplication, the catalog tiers, band origin and style enrichment, the genre allowlist and namesake rejection, filtering, Sonic Mood Capsules (with boundaries), sorting, riff tabs and playhead, and the Riff Arena rules (rounds and decoy modes, blur, scoring, tournament stages, stage pools, lives across stages, ranks, records, Head-to-Head metrics) |
+| `src/utils/trackUtils.test.ts` | Duration formatting, artwork upgrade, response validation, the studio-only (no live) filter, the compilation filter, normalization and de-duplication, the catalog tiers, band origin and style enrichment, the genre allowlist and namesake rejection, filtering, Sonic Mood Capsules (with boundaries), sorting (including Vault Picks tiers, artist rotation and determinism), riff tabs and playhead, and the Riff Arena rules (rounds and decoy modes, blur, scoring, tournament stages, stage pools, lives across stages, ranks, records, Head-to-Head metrics) |
 | `src/utils/setlistUtils.test.ts` | Setlist toggle, remove and bulk add, `localStorage` parsing (including corrupted data), poster tiers (Headliners vs Main Stage), the 6 poster themes, and the world tour dates |
 | `src/utils/builderUtils.test.ts` | The Sonic Diagnostic: questions, profile scoring, ranking, the 10-track playlist (max 2 per band), swapping, and Metal Personas |
 | `src/utils/streamingLinks.test.ts` | Apple Music / Spotify / YouTube links and search queries |
@@ -201,7 +207,7 @@ scripts/
 | `.map()` with a unique `key` | [`src/pages/CatalogPage.tsx:164-165`](src/pages/CatalogPage.tsx#L164-L165) (`key={track.id}`), and every other list |
 | ≥ 4 reusable components with typed props | 18 files in [`src/components/`](src/components/), e.g. `Navbar`, `TrackCard`, `FilterBar`, `StatusMessage`, `AudioPreviewPlayer`, each exporting a `…Props` interface |
 | TypeScript, zero `any` | Strict mode; no `any`, `@ts-ignore`, `@ts-expect-error` or `console.*` in `src` |
-| Unit tests (Vitest + UI) | 199 tests in 8 `*.test.ts` files; `npm test` and `npm run test:ui` |
+| Unit tests (Vitest + UI) | 208 tests in 8 `*.test.ts` files; `npm test` and `npm run test:ui` |
 | Docs | [PRD.md](PRD.md) ("When I…, I see…"), [tasks.md](tasks.md) (12 tasks), [docs/architecture.md](docs/architecture.md), [PROMPTS.md](PROMPTS.md) |
 
 ## Project documentation

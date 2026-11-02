@@ -49,7 +49,9 @@ src/
 │   ├── builderUtils.ts       # Sonic Diagnostic: questions, scoring, ranking, playlist, swap, persona
 │   ├── builderUtils.test.ts
 │   ├── streamingLinks.ts     # Apple Music / Spotify / YouTube full-song links
-│   └── streamingLinks.test.ts
+│   ├── streamingLinks.test.ts
+│   ├── relatedTracks.ts      # "More Like This": deterministic related tracks from the loaded catalog
+│   └── relatedTracks.test.ts
 │
 ├── components/               # Reusable building blocks (one component per file)
 │   ├── Navbar.tsx
@@ -62,6 +64,7 @@ src/
 │   ├── LineupPlayback.tsx    # "Play All" + per-row play buttons for a named queue (Setlist, Playlist)
 │   ├── StreamingLinks.tsx    # Full song on Apple Music / Spotify / YouTube (previews are 30 s)
 │   ├── StageBackdrop.tsx     # Decorative fixed stage: light beams, lightning, embers
+│   ├── RelatedTracks.tsx     # "More Like This" strip on the detail page
 │   ├── RiffTabPanel.tsx      # Guitar Riff Tab panel (detail page)
 │   ├── StatusMessage.tsx
 │   ├── SetlistButton.tsx
@@ -111,7 +114,8 @@ scripts/
     │   │                   └── <TrackDetailView key={track.id}>
     │   │                         ├── <SetlistButton />
     │   │                         ├── <AudioPreviewPlayer track />   (Amp Console → global player)
-    │   │                         └── <LiveRiffTab> → <RiffTabPanel tab activeStep />
+    │   │                         ├── <LiveRiffTab> → <RiffTabPanel tab activeStep />
+    │   │                         └── <RelatedTracks tracks={getRelatedTracks(track, catalog)} />
     │   │
     │   ├── "/setlist"     <SetlistPage setlist onRemove onClear>
     │   │                   ├── <StatusMessage />   (empty lineup)
@@ -157,6 +161,7 @@ playerEngine.ts (module store, outside React): one <audio> + Web Audio graph
 | `FestivalPoster` | Renders a `FestivalLineup` as a poster: Headliners (large display type), Main Stage underbill, styles (no flags), **World Tour Dates & Venues** (`WORLD_TOUR_STOPS`, `getTourYear`, `formatTourDate`), and tracks/bands/runtime stats; theme applied via a `data-theme` attribute | `lineup`, `theme`, `festivalName?` |
 | `StreamingLinks` | Apple Music (exact track, or a search), Spotify and YouTube links from `getStreamingLinks`, opening in new tabs; `full` (detail page) and `compact` (rows) variants | `track`, `variant?` |
 | `LineupPlayButton` / `RowPlayButton` | Play / pause / resume a whole list as a named queue, or start it at one row | `setlist`, `queueLabel?`, `noun?`, `playLabel?` / `setlist`, `index`, `queueLabel?` |
+| `RelatedTracks` | "More Like This": a horizontal, scroll-snapping strip of related tracks (300px art, title, artist), each a `Link` to `/tracks/:id` that also scrolls the window to the top. Renders nothing for an empty list. Purely presentational: no requests, no player state | `tracks: readonly Track[]` |
 | `StageBackdrop` | Fixed decorative layer: two swaying conic light beams, a flickering lightning bolt and rising embers (transform/opacity animations only) | — |
 | `BlindTestGame` | Tournament of 4 stages × 5 rounds with 3 lives (amp tubes) for the run → "Stage X Cleared!" transitions → final scoreboard (outcome, stage reached, rank, stats, records, recap with setlist toggles). Round flow (start → listen → guess or timeout → reveal → Next Riff / Stage X Cleared → / See Final Results), concealed playback through `playerEngine`, artwork unblurring with playback time, 4 option buttons with green/red feedback, speed-based points, streak, persisted best streak, and accuracy; stops a concealed round on unmount | `tracks` |
 | `RiffTabPanel` | Monospaced 6-line tab (`e B G D A E`) with tuning, BPM, and difficulty badges; labelled "Signature riff tab" or "Practice riff tab"; highlights the playhead column | `tab: GuitarRiffTab`, `subgenre`, `activeStep: number \| null` |
@@ -452,6 +457,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 | Visible tracks | Derived in `CatalogPage`: `useMemo(() => sortTracks(filterTracks(tracks, filters), filters.sort))` | Derived data — never stored in state | Props → `TrackCard`s |
 | Country / style / artist options | Derived with `getUniqueCountries` / `getUniqueSubgenres` / `getUniqueArtists` | Derived | Props → `FilterBar` |
 | Riff tab | Derived in `TrackDetailView`: `useMemo(() => getTrackRiffTab(track))` | Derived (deterministic) | Props → `LiveRiffTab` → `RiffTabPanel` |
+| Related tracks | Derived in `TrackDetailView`: `useMemo(() => getRelatedTracks(track, catalog), [track, catalog])`; `catalog` is App's `tracks`, so it updates as batches arrive | Derived (deterministic) | Props → `RelatedTracks` |
 | Current track | Derived in `TrackDetailPage` from `useParams().id` + `tracks` (then `setlist`) | Single source of truth is the URL | Rendered by `TrackDetailView` with `key={track.id}` |
 | **Playback** (loaded track, playing, time, duration, EQ preset, engine state, error) | `playerEngine.ts` — a module-level store outside React (one `<audio>` + one Web Audio graph per page) | Must outlive route changes; 60 fps time updates must not re-render `App` and the catalog | `usePlayer()` (`useSyncExternalStore`) in `AudioPreviewPlayer`, `LiveRiffTab`, `MiniPlayer` only; actions (`togglePlay`, `seek`, `setPreset`, `stop`) are called directly |
 | Poster theme | `SetlistPage` (`useState`) | Page-local | Props → `FestivalPoster` |
@@ -603,7 +609,7 @@ There are no external state libraries — just React state, custom hooks, and pr
 
 ## 6. Utility Functions
 
-All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **189 tests in 7 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, and `api/itunes`: the request plan, plus `fetchCatalog` partial-failure and caching behavior against a mocked `fetch` and `localStorage`); the label says which task added the tests. The tests never touch the network.
+All of these are **pure functions** with no React and no DOM, so they are easy to unit-test with Vitest. Every function marked ✅ is covered by the suite — **199 tests in 8 files** (`trackUtils`, `setlistUtils`, `catalogCache`, `audioUtils`, `builderUtils`, `streamingLinks`, `relatedTracks`, and `api/itunes`: the request plan, plus `fetchCatalog` partial-failure and caching behavior against a mocked `fetch` and `localStorage`); the label says which task added the tests. The tests never touch the network.
 
 ### `src/utils/trackUtils.ts`
 
@@ -711,6 +717,13 @@ All of these are **pure functions** with no React and no DOM, so they are easy t
 | `buildPlaylist` / `swapPlaylistTrack` | `(ranked, size = 10, maxPerArtist = 2) => Track[]` / `(ranked, playlist, index) => Track[]` | The 10-track playlist; swap one slot for the next-best fit | ✅ builder |
 | `getMetalPersona` | `({ mood, tempo }) => MetalPersona` | 12 persona titles + taglines, with a fallback | ✅ builder |
 | `bucketFrequencies` | `(data: ArrayLike<number>, bars: number, usableFraction = 0.75) => number[]` | Averages the lower 75% of FFT bins into `bars` values normalized to 0–1 | ✅ Task 5 |
+
+### `src/utils/relatedTracks.ts`
+
+| Function / constant | Signature | Behavior | Test |
+| --- | --- | --- | --- |
+| `getRelatedTracks` / `RELATED_TRACKS_LIMIT` | `(current, catalog, limit = 6) => Track[]` / `6` | "More Like This". Tier 1 is the same `subgenre`; tier 2 (only if room is left) is the same iTunes `genre` with a different style; nothing else is ever used. Within a tier, the best track of each other artist comes first, then their other tracks, then the current artist's. Ranked by release-year proximity (unknown last), then title and id, so the order never depends on catalog order. Excludes the current track and repeated ids | ✅ related tracks |
+| `normalizeGenreKey` | `(value) => string` | Trims, lower-cases and collapses spaces; missing or blank values become `''`, which never matches (two blank genres are not "the same") | ✅ related tracks |
 
 **Test fixtures:** `src/test/fixtures/mockTracks.json` (10 real iTunes records from US, UK, and Australian bands) uses the raw iTunes response shape, and tests load it through `parseSearchResults`, the same validation the live API uses. It fed the static list in Tasks 1–2; since Task 3 only the `*.test.ts` files import it (moved out of `src/data/` in Task 12 to make that obvious). The tests never hit the network.
 

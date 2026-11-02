@@ -629,3 +629,62 @@ Completed final pre-defense rubric audit: consolidated tasks.md into 12 numbered
 > Do not commit or push changes.
 > Report the exact documentation edits.
 > </pasted_content id="5dbb">
+
+**18:57 · claude**
+
+> <pasted_content id="5dbb">
+> Implement one new feature in Rock & Metal Vault: a "More Like This" related tracks section at the bottom of each track detail page.
+> 
+> GOAL:
+> Help users discover musically related songs from the existing iTunes catalog without new API requests.
+> 
+> REQUIREMENTS:
+> 1. Create a reusable, properly typed RelatedTracks component with its own CSS styling.
+> 2. Display up to 6 recommended tracks in a responsive horizontal strip below the existing track detail content, including the riff tab section.
+> 3. Prioritize tracks sharing the exact subgenre of the current track, preferably from different artists.
+> 4. When fewer than 6 matches exist, use tracks with the same broad iTunes genre. Never pad with completely unrelated tracks.
+> 5. Never include the current track or duplicate track IDs.
+> 6. Keep recommendations deterministic and stable across renders. Do not randomly shuffle the selection.
+> 7. Each recommendation should show album artwork, track title and artist, and link to its own existing /tracks/:id detail route.
+> 8. Recalculate recommendations when navigating between tracks, including when additional catalog batches arrive.
+> 9. Handle an empty or partial catalog gracefully without new API requests or broken placeholders.
+> 10. Match the existing dark rock/metal visual design, with accessible links and smooth horizontal scrolling on mobile.
+> 11. Implement the recommendation logic as a pure, testable utility function. Add meaningful Vitest tests for exact subgenre matches, fallback matches, exclusion of the current track, duplicate prevention, ordering, and insufficient matches.
+> 12. Keep existing loading/error behavior, global audio player, setlist, caching logic and navigation unchanged.
+> 13. Update relevant documentation for the new feature without rewriting historical task records.
+> 
+> QUALITY:
+> Run npm test, npm run build and npm run lint -- --max-warnings 0. Report actual results and changed files.
+> 
+> CONSTRAINTS:
+> No new API calls, dependencies, external recommendation services or unrelated refactoring.
+> Follow CLAUDE.md and AGENTS.md.
+> Do not commit or push changes.
+> Stop after this feature and report back.
+> </pasted_content id="5dbb">
+
+**19:01 · claude**
+
+> <pasted_content id="5dbb">
+> Approved. Please proceed with the implementation exactly as planned, with three additional requirements:
+> 
+> 1. Ensure tracks with missing or empty `subgenre` / `genre` values are never treated as matching simply because both values are missing. Normalize genre strings safely before comparison.
+> 2. Verify that clicking a recommended track correctly navigates to its detail page and recalculates recommendations for the newly selected track, without disrupting the global audio player.
+> 3. Keep `tasks.md` unchanged. Do not extend Task 12 or rewrite historical task records.
+> 
+> I approve your deterministic ranking approach, including artist diversity and release-year proximity as a tie-breaker.
+> 
+> Keep the implementation focused and avoid modifying unrelated functionality.
+> 
+> After implementation, run all unit tests, the production build, and ESLint. Report the exact files changed, the number of new tests, and any edge cases.
+> 
+> Do not commit or push. Stop and report the results when finished.
+> </pasted_content id="5dbb">
+### Manual Verification – More Like This
+
+- Verified that all 199 unit tests pass.
+- Confirmed that the production build and ESLint pass.
+- Tested related track recommendations and navigation.
+- Verified that no duplicate tracks appear.
+- Confirmed that the global audio player continues working.
+- Checked responsive horizontal scrolling at 375px.

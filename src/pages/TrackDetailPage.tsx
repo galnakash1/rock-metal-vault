@@ -2,12 +2,14 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import StreamingLinks from '../components/StreamingLinks'
 import AudioPreviewPlayer from '../components/AudioPreviewPlayer'
+import RelatedTracks from '../components/RelatedTracks'
 import RiffTabPanel from '../components/RiffTabPanel'
 import SetlistButton from '../components/SetlistButton'
 import StatusMessage from '../components/StatusMessage'
 import { usePlayer } from '../hooks/usePlayer'
 import type { GuitarRiffTab } from '../types/riff'
 import type { FetchStatus, Track } from '../types/track'
+import { getRelatedTracks } from '../utils/relatedTracks'
 import { getRiffPlayheadIndex, getTrackRiffTab } from '../utils/riffTabs'
 import { formatDuration, resolveTrackDetail } from '../utils/trackUtils'
 
@@ -47,6 +49,7 @@ function TrackDetailPage({
       <TrackDetailView
         key={track.id}
         track={track}
+        catalog={tracks}
         inSetlist={isInSetlist(track.id)}
         onToggleSetlist={() => onToggleSetlist(track)}
       />
@@ -81,12 +84,16 @@ function TrackDetailPage({
 
 interface TrackDetailViewProps {
   track: Track
+  /** The catalog loaded so far, for "More Like This" (grows as later batches arrive). */
+  catalog: readonly Track[]
   inSetlist: boolean
   onToggleSetlist: () => void
 }
 
-function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewProps) {
+function TrackDetailView({ track, catalog, inSetlist, onToggleSetlist }: TrackDetailViewProps) {
   const riffTab = useMemo(() => getTrackRiffTab(track), [track])
+  // Recomputed for each track and whenever another catalog batch arrives; no extra requests.
+  const relatedTracks = useMemo(() => getRelatedTracks(track, catalog), [track, catalog])
 
   return (
     <article className="track-detail">
@@ -163,6 +170,8 @@ function TrackDetailView({ track, inSetlist, onToggleSetlist }: TrackDetailViewP
         <AudioPreviewPlayer track={track} />
         <LiveRiffTab track={track} tab={riffTab} />
       </div>
+
+      <RelatedTracks tracks={relatedTracks} />
     </article>
   )
 }

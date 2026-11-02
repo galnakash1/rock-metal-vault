@@ -111,6 +111,7 @@ https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
   - Selectable **EQ presets**, applied live while playing: `Flat`, `Metalcore Scoop` (boosted lows and highs, scooped mids), `Classic Tube Amp` (warm mid push, softened highs), and `Bass Drop` (heavy low-end boost).
 - An add/remove-from-setlist toggle button.
 - A "Back to Vault" link.
+- **More Like This:** below the Amp Console and riff tab, a horizontal strip of up to **6 related tracks**, each with artwork, title and artist, linking to its own `/tracks/:id` page. Tracks with the **same style** come first, preferring other artists and the closest release years; only if fewer than 6 exist, tracks with the **same iTunes genre** fill in. Unrelated tracks are never used as filler, so the strip may be shorter or hidden. It never shows the current track or a duplicate, its order is deterministic, it updates when navigating and as later catalog batches arrive, and it makes no extra API requests. On phones it scrolls sideways.
 - If the id is invalid or not found, shows a clear "Track not found" message with a link back to the catalog.
 
 ### c) `/setlist` — Festival Lineup & Poster Builder
@@ -203,12 +204,13 @@ https://itunes.apple.com/lookup?id=3996865,112018&entity=song&limit=50
 20. **When I** navigate to an unknown URL such as `/blast-beats`, **I see** the 404 page with a link back to the Vault.
 21. **When I** open the app on a narrow mobile screen (~375px wide), **I see** a single-column layout with no horizontal scrolling and a usable Navbar.
 22. **When I** open the app for the first time with DevTools → Network open, **I see** the catalog requests go to `itunes.apple.com/search` and `itunes.apple.com/lookup`, and every card on screen comes from their responses.
+23. **When I** scroll to the bottom of a metalcore track's page, **I see** "More Like This" with up to 6 other metalcore tracks (artwork, title, artist), none of them the current track. **When I** click one, **I see** that track's page from the top, with a new set of related tracks, while any preview I was playing keeps playing.
 
 ## 7. Non-Functional Requirements
 
 - **Type safety:** TypeScript strict mode, zero `any`; API responses are typed and normalized into app models.
 - **Quality:** `npm run build`, `npm run lint -- --max-warnings 0`, and `npm test` all pass with zero errors or warnings; `npm run test:ui` opens the Vitest UI in the browser.
-- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **189 tests in 7 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
+- **Testing:** meaningful Vitest unit tests for all pure logic (the requirement was at least 8–10; the project ships **199 tests in 8 files**): formatting, validation and normalization, enrichment, filtering and moods, sorting, riff tabs and the playhead, setlist persistence and poster tiers, catalog caching and the request plan, EQ and visualizer helpers, and the Riff Arena game rules.
 - **Accessibility:** semantic HTML, labelled form controls, `alt` text on artwork, and visible keyboard focus.
 - **Responsiveness:** works from about 360px mobile width up to wide desktop.
 
